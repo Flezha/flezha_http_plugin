@@ -2,16 +2,16 @@ defmodule Chat do
   @moduledoc """
   The chat fixture the end-to-end run drives through the HTTP server plugin.
 
-    * `gateway` (unbounded, keyed by user): the plugin's host. It routes each
+    * `gateway` (flow, keyed by user): the plugin's host. It routes each
       request envelope, keeps each user's session register and daily token
       budget, answers every request through `response()`, and calls the `agent`
       factory to open a session or to hand it a message.
-    * `agent` (bounded, `per_input`, `keep_progress`, durable, sleeping when
-      idle): one per session. A turn sends one part per word 100 ms apart,
+    * `agent` (steps, `per_input`, `keep_progress`, kept locally, sleeping five
+      seconds after its last turn): one per session. A turn sends one part per word 100 ms apart,
       emits the answer on the sink `events`, and answers the gateway's call with
       the tokens it used; the message `fail` fails the turn for good.
-    * `pinger` (bounded, `per_input`): answers every request `pong`.
-    * `echo` (unbounded): emits every input on the sink `out`.
+    * `pinger` (steps, `per_input`): answers every request `pong`.
+    * `echo` (flow): emits every input on the sink `out`.
   """
 
   @budget 40
@@ -157,7 +157,7 @@ defmodule Chat do
 
   defmodule Gateway do
     @moduledoc false
-    use Flezha.SDK.UnboundedOperator, factory_id: "gateway"
+    use Flezha.SDK.Operator, factory_id: "gateway"
 
     @call [deadline_ms: 120_000, decode: &Jason.decode/1]
 
@@ -194,13 +194,10 @@ defmodule Chat do
 
   defmodule Agent do
     @moduledoc false
-    use Flezha.SDK.BoundedOperator,
+    use Flezha.SDK.Operator,
       factory_id: "agent",
-      loop_mode: :per_input,
-      rollback_mode: :keep_progress,
-      persistence_enabled: true,
-      sleep_when_idle: true,
-      self_terminating?: false,
+      run: {:steps, each: :per_input, on_failure: :keep_progress},
+      durable: {:local, sleep_after: 5_000},
       max_duration_ms: 86_400_000
 
     @impl true
@@ -251,7 +248,7 @@ defmodule Chat do
 
   defmodule Pinger do
     @moduledoc false
-    use Flezha.SDK.BoundedOperator, factory_id: "pinger", loop_mode: :per_input
+    use Flezha.SDK.Operator, factory_id: "pinger", run: {:steps, each: :per_input}
 
     # Keyed on its entry, so the end-to-end run can start it as a partition group.
     @impl true
@@ -277,7 +274,7 @@ defmodule Chat do
 
   defmodule Echo do
     @moduledoc false
-    use Flezha.SDK.UnboundedOperator, factory_id: "echo", input: "in", sink: "out"
+    use Flezha.SDK.Operator, factory_id: "echo", input: "in", sink: "out"
 
     def run(input, state, ctx) do
       emit(ctx, input)

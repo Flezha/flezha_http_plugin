@@ -219,7 +219,7 @@ check_l() {
   local status
   status=$(http l "http://127.0.0.1:18081/ping")
   if [ "$status" = 200 ] && [ "$(cat "$TMP/out/l.body")" = pong ]; then
-    pass l "GET /ping on the bounded pinger gives 200 pong"
+    pass l "GET /ping on the steps pinger gives 200 pong"
   else
     fail l "GET /ping gave $status $(cat "$TMP/out/l.body")"
   fi
@@ -297,7 +297,7 @@ check_s() {
   stream_open s
   flz operator send echo --text hi >/dev/null 2>&1
   if until_ok 10 "[ \$(events s output) -ge 1 ]" && [ "$(payloads s output)" = hi ]; then
-    pass s "an unbounded operator's output reaches the stream"
+    pass s "a flow operator's output reaches the stream"
   else
     fail s "events: $(tr '\n' ' ' <"$TMP/out/s.events")"
   fi
