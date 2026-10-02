@@ -27,13 +27,15 @@ defmodule FlezhaHttp.CatalogueTest do
            "not in flz_transport/errors.json: #{Enum.join(named -- codes, ", ")}"
   end
 
-  test "the two tagged reasons map to their codes" do
+  test "the tagged reasons map to their codes" do
     for {tag, code} <- [
-          http_partitioned_host: "http.partitioned_host",
+          partitioned_host: "plugin.partitioned_host",
           http_listen_failed: "http.listen_failed"
         ] do
       assert Map.has_key?(@catalogue["codes"], code), "#{code} is not in the catalogue"
       assert %Flezha.Error{code: ^code} = Flezha.Error.from_reason({tag, %{operator: "o"}}, nil)
     end
+
+    refute Map.has_key?(@catalogue["codes"], "http.partitioned_host")
   end
 end

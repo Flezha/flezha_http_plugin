@@ -234,9 +234,9 @@ check_m() {
   rows=$( (operator_json 'pg#p0'; operator_json 'pg#p1') | grep -c '"web2')
   flz operator start pinger --id pg2 --partitions 2 --plugins "$spec" --json >"$TMP/out/m.start" 2>&1
   local declined=$?
-  if [ $refused != 0 ] && grep -q 'http.partitioned_host' "$TMP/out/m.enable" && [ "$rows" = 0 ] &&
-    [ $declined != 0 ] && grep -q 'http_partitioned_host' "$TMP/out/m.start" && [ "$(operator_json 'pg2#p0')" = "{}" ]; then
-    pass m "enable on a group is refused with http.partitioned_host and leaves no row; a group declaring it does not start"
+  if [ $refused != 0 ] && grep -q 'plugin.partitioned_host' "$TMP/out/m.enable" && [ "$rows" = 0 ] &&
+    [ $declined != 0 ] && grep -q 'partitioned_host' "$TMP/out/m.start" && [ "$(operator_json 'pg2#p0')" = "{}" ]; then
+    pass m "enable on a group is refused with plugin.partitioned_host and leaves no row; a group declaring it does not start"
   else
     fail m "enable exit $refused: $(cat "$TMP/out/m.enable"); rows $rows; start exit $declined: $(cat "$TMP/out/m.start")"
   fi

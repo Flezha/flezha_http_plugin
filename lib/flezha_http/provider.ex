@@ -113,7 +113,8 @@ defmodule FlezhaHttp.Provider do
   """
   @impl true
   def init_provider(opts) do
-    with :ok <- refuse_partitioned(opts),
+    # A client cannot address a port per member of a group without knowing the key.
+    with :ok <- ProviderBehaviour.refuse_partitioned(opts, __MODULE__),
          :ok <- ProviderBehaviour.require_entry_channel(opts, __MODULE__),
          {:ok, _address} <- address(opts.bind),
          :ok <- check_pass_headers(opts.pass_headers) do
@@ -131,13 +132,6 @@ defmodule FlezhaHttp.Provider do
   end
 
   def address(bind), do: ProviderBehaviour.refuse_value(:bind, bind)
-
-  # Two members of a group can land on one node, and a client cannot address a
-  # port per member without knowing the key.
-  defp refuse_partitioned(%{partition_count: count} = opts) when not is_nil(count),
-    do: {:error, {:http_partitioned_host, %{operator: opts[:source_operator_id]}}}
-
-  defp refuse_partitioned(_opts), do: :ok
 
   defp check_pass_headers(names) do
     if Enum.all?(names, &token?/1),

@@ -58,7 +58,7 @@ defmodule FlezhaHttp.ProviderTest do
   end
 
   test "a member of a partition group is refused, naming it" do
-    assert {:error, {:http_partitioned_host, %{operator: "pinger#p0"}}} =
+    assert {:error, {:partitioned_host, %{provider: "http_server", operator: "pinger#p0"}}} =
              Options.normalise_opts(Provider, %{port: 18_080, channel: "http"})
              |> then(fn {:ok, opts} ->
                Provider.init_provider(
@@ -70,8 +70,11 @@ defmodule FlezhaHttp.ProviderTest do
                )
              end)
 
-    assert %Flezha.Error{code: "http.partitioned_host", details: %{"operator" => "pinger#p0"}} =
-             Flezha.Error.from_reason({:http_partitioned_host, %{operator: "pinger#p0"}}, nil)
+    assert %Flezha.Error{code: "plugin.partitioned_host", details: %{"operator" => "pinger#p0"}} =
+             Flezha.Error.from_reason(
+               {:partitioned_host, %{provider: "http_server", operator: "pinger#p0"}},
+               nil
+             )
   end
 
   test "one worker per operator and plugin, keyed by namespace, operator and plugin" do
