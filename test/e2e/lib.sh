@@ -2,7 +2,7 @@
 # package, the runners, and the HTTP and stream helpers. Sourced, never run.
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PLUGIN=$(cd "$HERE/../.." && pwd)
-CORE=$(cd "$PLUGIN/../flezha" && pwd)
+CORE=$(cd "$PLUGIN/../.." && pwd)
 REL=${FLEZHA_RELEASE:-$CORE/_build/prod/rel/flezha}
 # A Unix socket path must fit in 108 bytes, so the directory stays short.
 TMP=$(mktemp -d /tmp/flzhttp.XXXX)

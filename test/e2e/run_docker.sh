@@ -39,18 +39,19 @@ docker build -q -f "$CORE/docker/prod/Dockerfile.controller" -t "$RUNTIME" "$COR
 docker build -q --target plugin-builder -f "$CORE/docker/prod/Dockerfile.controller" -t "$BUILDER" "$CORE" \
   >>"$TMP/out/build.log" 2>&1 || { tail -30 "$TMP/out/build.log"; exit 1; }
 
-# The core and the clone side by side as the builder sees them, without the
-# host's build products: the core's SDK test app fetches into a directory of its
-# own, so the checkouts themselves are never mounted writable.
+# The core with this package at its submodule path, as the builder sees them,
+# without the host's build products: the core's SDK test app fetches into a
+# directory of its own, so the checkouts themselves are never mounted writable.
 say "packaging the plugin inside the builder"
-mkdir -p "$TMP/pkg" "$TMP/s" "$TMP/code/flezha" "$TMP/code/$(basename "$PLUGIN")"
+INNER="flezha/plugins/$(basename "$PLUGIN")"
+mkdir -p "$TMP/pkg" "$TMP/s" "$TMP/code/flezha" "$TMP/code/$INNER"
 (cd "$CORE" && tar -cf - --exclude='_build' --exclude='deps' --exclude='target' \
   mix.exs mix.lock config lib protobufs rel flz_transport/errors.json flz_core/src/schema.rs \
   flz_core_ffi/src/veneer/shape.rs openspec/specs/java-sdk/spec.md test/fixtures sdk/elixir) |
   tar -xf - -C "$TMP/code/flezha"
 (cd "$PLUGIN" && tar -cf - --exclude='_build' --exclude='deps' --exclude='test/e2e' .) |
-  tar -xf - -C "$TMP/code/$(basename "$PLUGIN")"
-docker run --rm -v "$TMP/code:/code" -v "$TMP/pkg:/out" -w "/code/$(basename "$PLUGIN")" \
+  tar -xf - -C "$TMP/code/$INNER"
+docker run --rm -v "$TMP/code:/code" -v "$TMP/pkg:/out" -w "/code/$INNER" \
   -e MIX_ENV=prod -e RUSTLER_SKIP_COMPILATION=true "$BUILDER" \
   sh -c "mix deps.get >/dev/null && mix flezha.plugin.package --output /out && chown -R $(id -u):$(id -g) /out /code" \
   >"$TMP/out/package.log" 2>&1 || { tail -30 "$TMP/out/package.log"; exit 1; }
@@ -75,14 +76,14 @@ ctl plugin list --installed | grep -q 'flezha_http 0.1.0  loaded' || fail instal
 say "the runner on the host, the gateway on 0.0.0.0"
 build_chat
 FLEZHA_SOCKET_FILES_PATH=$TMP/s start_runner runner default
-web='[{"id":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","bind":"0.0.0.0","channel":"http","pass_headers":"x-api-key"}}]'
+web='[{"name":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","bind":"0.0.0.0","channel":"http","pass_headers":"x-api-key"}}]'
 until_ok 60 "ctl operator start gateway --id gateway --plugins '$web'" || { say "gateway did not start"; exit 1; }
 until_ok 30 "curl -s -o /dev/null $GW/no-route" || { say "the published port does not answer"; exit 1; }
 check_a
 check_b
 
 say "the default bind inside the container"
-ctl plugin disable web --operator_id=gateway >/dev/null
+ctl plugin disable web >/dev/null
 ctl plugin enable web2 http_server --operator_id=gateway --hook=on_terminate --Xport=18080 --Xchannel=http \
   >"$TMP/out/loopback.log" 2>&1
 status=$(curl -s -o /dev/null -w '%{http_code}' -m 2 "$GW/no-route")

@@ -41,8 +41,8 @@ setup() {
   start_runner runner default
   start_runner runner_other other
 
-  local web='[{"id":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","channel":"http","pass_headers":"x-api-key","heartbeat_ms":"1000","deadline_ms":"2000","stream_wait_ms":"3000","max_body_bytes":"4096"}}]'
-  local ping='[{"id":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18081","channel":"http"}}]'
+  local web='[{"name":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","channel":"http","pass_headers":"x-api-key","heartbeat_ms":"1000","deadline_ms":"2000","stream_wait_ms":"3000","max_body_bytes":"4096"}}]'
+  local ping='[{"name":"ping","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18081","channel":"http"}}]'
   start_operator gateway gateway --plugins "$web"
   start_operator pinger pinger --plugins "$ping"
   until_ok 30 "curl -s -o /dev/null $GW/nothing-here" || { say "nothing listens on 18080"; exit 1; }
@@ -226,7 +226,7 @@ check_l() {
 }
 
 check_m() {
-  local spec='[{"id":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18090","channel":"http"}}]'
+  local spec='[{"name":"web_pg2","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18090","channel":"http"}}]'
   start_operator pinger pg --partitions 2
   flz plugin enable web2 http_server --operator_id=pg --hook=on_terminate --Xport=18089 --Xchannel=http \
     >"$TMP/out/m.enable" 2>&1
@@ -246,7 +246,7 @@ check_n() {
   flz plugin enable web3 http_server --operator_id=pinger --hook=on_terminate --Xport=18080 --Xchannel=http \
     >"$TMP/out/n.enable" 2>&1
   local refused=$?
-  flz plugin disable web3 --operator_id=pinger >/dev/null 2>&1
+  flz plugin disable web3 >/dev/null 2>&1
   if [ $refused != 0 ] && grep -q 'http.listen_failed' "$TMP/out/n.enable" &&
     [ "$(http n "$GW/no-route" -m 1)" = 404 ]; then
     pass n "a second server on 18080 fails with http.listen_failed, and the first keeps answering"
@@ -304,7 +304,7 @@ check_s() {
 }
 
 check_q() {
-  flz plugin disable web --operator_id=gateway >"$TMP/out/q.disable" 2>&1
+  flz plugin disable web >"$TMP/out/q.disable" 2>&1
   if until_ok 5 "! (echo >/dev/tcp/127.0.0.1/18080)"; then
     pass q "disabling the plugin refuses the next connection to 18080"
   else

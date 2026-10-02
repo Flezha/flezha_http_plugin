@@ -2,8 +2,8 @@ defmodule FlezhaHttp.MixProject do
   use Mix.Project
 
   # The HTTP server plugin, packaged with `mix flezha.plugin.package` and loaded
-  # by a Flezha controller at boot. `flezha` is the core checkout beside this
-  # one until it is published.
+  # by a Flezha controller at boot. `flezha` is the core this package is a
+  # submodule of, two directories up, until it is published.
   def project do
     [
       app: :flezha_http,
@@ -29,7 +29,7 @@ defmodule FlezhaHttp.MixProject do
 
   defp deps do
     [
-      {:flezha, path: "../flezha"},
+      {:flezha, path: "../.."},
       {:bandit, "~> 1.10"},
       {:plug, "~> 1.18"}
     ]

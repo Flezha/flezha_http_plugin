@@ -68,7 +68,7 @@ until_ok 60 "on A flzvm rpc 'IO.puts(Enum.member?(Node.list(), :\"$NODE_B@127.0.
 say "the gateway on A"
 build_chat
 on A start_runner runner_a default
-web='[{"id":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","channel":"http","pass_headers":"x-api-key","heartbeat_ms":"1000"}}]'
+web='[{"name":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","channel":"http","pass_headers":"x-api-key","heartbeat_ms":"1000"}}]'
 on A start_operator gateway gateway --plugins "$web"
 until_ok 30 "curl -s -o /dev/null $GW/no-route" || { say "nothing listens on 18080"; exit 1; }
 before=$(gateway_node A)

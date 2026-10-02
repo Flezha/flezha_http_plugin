@@ -10,7 +10,7 @@ defmodule Chat.MixProject do
       app: :chat,
       version: "0.1.0",
       elixir: "~> 1.17",
-      deps: [{:flezha_sdk, path: "../../../../flezha/sdk/elixir"}]
+      deps: [{:flezha_sdk, path: "../../../../../sdk/elixir"}]
     ]
   end
 

@@ -25,8 +25,8 @@ test/e2e/                     the chat fixture (an Elixir SDK runner) and run.sh
 
 ## Building and testing
 
-The project depends on the Flezha core as a path dependency, so the core checkout must sit
-beside this one, at `../flezha`. Nothing is published before go-live.
+The project depends on the Flezha core as a path dependency: it is the core's submodule at
+`plugins/flezha_http_plugin`, so the core is `../..`. Nothing is published before go-live.
 
 ```
 mix deps.get
@@ -56,8 +56,8 @@ WebSock, `mime` and `plug_crypto`, and nothing the release ships. For a controll
 package it in the image's `plugin-builder` stage, so its OTP is the image's:
 
 ```
-docker build --target plugin-builder -t flezha/plugin-builder ../flezha
-docker run --rm -v /path/to/Code:/src -w /src/flezha_http_plugin flezha/plugin-builder \
+docker build --target plugin-builder -t flezha/plugin-builder ../..
+docker run --rm -v /path/to/flezha:/src -w /src/plugins/flezha_http_plugin flezha/plugin-builder \
   sh -c 'MIX_ENV=prod mix deps.get && MIX_ENV=prod RUSTLER_SKIP_COMPILATION=true mix flezha.plugin.package'
 ```
 
