@@ -1,23 +1,30 @@
 # flezha_http
 
-The HTTP server plugin for Flezha: a plugin package, `flezha_http`, whose one provider,
-`http_server`, puts an operator behind an HTTP/1.1 port. Every request becomes one outside
-call of the operator, the operator's `response()` answer becomes the HTTP response, and a
-stream answer turns the connection into server-sent events of another operator's parts and
-outputs. It is built on Bandit and Plug.
+The HTTP plugins for Flezha: a plugin package, `flezha_http`, with two providers on Bandit
+and Plug.
 
-The contract (options, envelopes, statuses, events, security, deployment) is the core's
-page `docs/plugins/http_server.md`; this README covers the repository.
+- `http_server` puts an operator behind an HTTP/1.1 port. Every request becomes one outside
+  call of the operator, the operator's `response()` answer becomes the HTTP response, and a
+  stream answer turns the connection into server-sent events of another operator's parts
+  and outputs. Its contract is the core's page `docs/plugins/http_server.md`.
+- `http_api` serves the controller's published operations to a bearer token's principal,
+  as MCP tools at `POST /mcp` and as plain JSON under `/v1`. It is a controller plugin,
+  enabled in `_system`. Its contract is the core's page `docs/plugins/http_api.md`.
+
+This README covers the repository.
 
 ## Layout
 
 ```
-lib/flezha_http/provider.ex   the provider: options, validation, the worker it declares
-lib/flezha_http/server.ex     the worker: owns Bandit and the caps' counters
+lib/flezha_http/provider.ex   the http_server provider: options, validation, its worker
+lib/flezha_http/api_provider.ex  the http_api provider: options, the TLS rule, its worker
+lib/flezha_http/server.ex     the worker of both: owns Bandit and the caps' counters
 lib/flezha_http/handler.ex    the Plug: body, request envelope, the call, the answer
 lib/flezha_http/envelope.ex   the request envelope and the answer decoding
 lib/flezha_http/events.ex     a stream: the listener and the server-sent events
 lib/flezha_http/status.ex     the HTTP status of every error code
+lib/flezha_http/api.ex        the http_api Plug: origin, bearer token, routes, the door
+lib/flezha_http/mcp.ex        MCP over Streamable HTTP: JSON-RPC, the tools, their calls
 test/flezha_http/             unit tests (Plug.Test), server tests on a real Bandit,
                               the catalogue and docs-table checks
 test/e2e/                     the chat fixture (an Elixir SDK runner) and run.sh
@@ -39,8 +46,8 @@ RUSTLER_SKIP_COMPILATION=true mix format --check-formatted
 never loads it. `mix test` runs with `--no-start`, so no controller boots; the tests start
 Bandit alone and stand in for the operator. The catalogue test fails when a code the plugin
 uses is missing from the core's `flz_transport/errors.json`, and the docs test when the
-option table of `docs/plugins/http_server.md` differs from the provider's declaration,
-printing the table to put there.
+option table of `docs/plugins/http_server.md` or `docs/plugins/http_api.md` differs from
+its provider's declaration, printing the table to put there.
 
 ## Packaging
 

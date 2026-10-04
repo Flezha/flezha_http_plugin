@@ -74,7 +74,7 @@ defmodule FlezhaHttp.ServerTest do
     assert log =~ "port #{ctx.port} already in use"
 
     assert details == %{
-             operator: "gateway",
+             plugin: "web",
              address: "127.0.0.1",
              port: ctx.port,
              reason: :eaddrinuse

@@ -1,9 +1,12 @@
 defmodule FlezhaHttp.Server do
   @moduledoc """
-  The provider's declared worker: it owns the Bandit listener and the counters
-  its caps are kept in.
+  The declared worker of both providers: it owns the Bandit listener and the
+  counters its caps are kept in. It serves the Plug its worker options name
+  (`plug`, `FlezhaHttp.Handler` by default), over TLS when they name a
+  `tls_certfile` and a `tls_keyfile`.
 
-  It follows its host: it stops when the host operator's Overwatch goes away,
+  It follows its host: it stops when the host (an operator's Overwatch, or a
+  controller plugin's running copy) goes away,
   stops Bandit before its own stop returns so a replacement can bind the port at
   once, and is not reused by a new Overwatch while its own host is gone. A port
   it cannot bind stops it with `{:http_listen_failed, details}`.
@@ -69,7 +72,7 @@ defmodule FlezhaHttp.Server do
     config = handler_config(opts, host, counters)
 
     bandit = [
-      plug: {FlezhaHttp.Handler, config},
+      plug: {Map.get(opts, :plug, FlezhaHttp.Handler), config},
       ip: ip,
       port: opts.port,
       startup_log: false,
@@ -84,7 +87,7 @@ defmodule FlezhaHttp.Server do
       ]
     ]
 
-    case Bandit.start_link(bandit) do
+    case Bandit.start_link(bandit ++ tls(opts)) do
       {:ok, bandit} ->
         {:ok,
          %{
@@ -99,7 +102,7 @@ defmodule FlezhaHttp.Server do
         {:stop,
          {:http_listen_failed,
           %{
-            operator: opts.source_operator_id,
+            plugin: opts.source_plugin_id,
             address: opts.bind,
             port: opts.port,
             reason: cause(reason)
@@ -119,6 +122,12 @@ defmodule FlezhaHttp.Server do
       listen: Map.get(opts, :listen, &Flezha.Service.Listener.listen/4)
     })
   end
+
+  defp tls(%{tls_certfile: certfile, tls_keyfile: keyfile})
+       when is_binary(certfile) and is_binary(keyfile),
+       do: [scheme: :https, certfile: certfile, keyfile: keyfile]
+
+  defp tls(_opts), do: []
 
   @impl true
   def handle_info({:DOWN, ref, :process, _pid, _reason}, %{host_ref: ref} = state),

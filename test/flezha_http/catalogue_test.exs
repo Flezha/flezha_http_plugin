@@ -33,7 +33,7 @@ defmodule FlezhaHttp.CatalogueTest do
           http_listen_failed: "http.listen_failed"
         ] do
       assert Map.has_key?(@catalogue["codes"], code), "#{code} is not in the catalogue"
-      assert %Flezha.Error{code: ^code} = Flezha.Error.from_reason({tag, %{operator: "o"}}, nil)
+      assert %Flezha.Error{code: ^code} = Flezha.Error.from_reason({tag, %{plugin: "p"}}, nil)
     end
 
     refute Map.has_key?(@catalogue["codes"], "http.partitioned_host")

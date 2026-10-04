@@ -3,21 +3,27 @@ defmodule FlezhaHttp.DocsTest do
 
   alias Flezha.Plugin.ProviderBehaviour.Options
 
-  @page Path.join(Mix.Project.deps_paths()[:flezha], "docs/plugins/http_server.md")
+  @docs Path.join(Mix.Project.deps_paths()[:flezha], "docs/plugins")
 
-  test "the core's page carries the option table the provider's declaration renders" do
-    rendered = Options.render_options_table(FlezhaHttp.Provider)
+  for {provider, page} <- [
+        {FlezhaHttp.Provider, "http_server.md"},
+        {FlezhaHttp.ApiProvider, "http_api.md"}
+      ] do
+    test "#{page} carries the option table #{inspect(provider)}'s declaration renders" do
+      page = Path.join(@docs, unquote(page))
+      rendered = Options.render_options_table(unquote(provider))
 
-    documented =
-      @page
-      |> File.read!()
-      |> String.split("<!-- provider-options:begin -->\n")
-      |> Enum.at(1, "")
-      |> String.split("<!-- provider-options:end -->")
-      |> hd()
+      documented =
+        page
+        |> File.read!()
+        |> String.split("<!-- provider-options:begin -->\n")
+        |> Enum.at(1, "")
+        |> String.split("<!-- provider-options:end -->")
+        |> hd()
 
-    assert documented == rendered,
-           "#{@page}'s option table has drifted from FlezhaHttp.Provider's declaration.\n" <>
-             "Replace the block between the provider-options markers with:\n\n" <> rendered
+      assert documented == rendered,
+             "#{page}'s option table has drifted from #{inspect(unquote(provider))}'s declaration.\n" <>
+               "Replace the block between the provider-options markers with:\n\n" <> rendered
+    end
   end
 end

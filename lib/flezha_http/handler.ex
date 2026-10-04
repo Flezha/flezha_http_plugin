@@ -25,13 +25,22 @@ defmodule FlezhaHttp.Handler do
   def init(config), do: config
 
   @impl true
-  def call(conn, config) do
+  def call(conn, config),
+    do: logged(conn, &serve(&1, config), fn _conn -> " operator=#{config.operator}" end)
+
+  @doc """
+  `serve` `conn`, then log its method, path, status, duration and `detail` of
+  the answered conn, at debug level: the one request line of the package.
+  """
+  @spec logged(Plug.Conn.t(), (Plug.Conn.t() -> Plug.Conn.t()), (Plug.Conn.t() -> String.t())) ::
+          Plug.Conn.t()
+  def logged(conn, serve, detail) do
     started = System.monotonic_time(:millisecond)
-    conn = serve(conn, config)
+    conn = serve.(conn)
 
     Logger.debug(fn ->
       "[FlezhaHttp] #{conn.method} #{conn.request_path} #{conn.status} " <>
-        "#{System.monotonic_time(:millisecond) - started}ms operator=#{config.operator}"
+        "#{System.monotonic_time(:millisecond) - started}ms" <> detail.(conn)
     end)
 
     conn
@@ -94,11 +103,17 @@ defmodule FlezhaHttp.Handler do
   defp respond(conn, {:stream, target, headers}, config),
     do: Events.stream(conn, target, headers, config)
 
-  # A body must say its length: a `content-length` over the limit is refused
-  # before a byte is read, and a body sent without one (chunked) is refused
-  # unread, since its reads could not be held to the deadline. The whole read has
-  # one deadline, each read being given what is left of it for one recv.
-  defp read_body(conn, config) do
+  @doc """
+  Read `conn`'s body within `config`'s `max_body_bytes` and `body_timeout_ms`.
+
+  A body must say its length: a `content-length` over the limit is refused
+  before a byte is read, and a body sent without one (chunked) is refused
+  unread, since its reads could not be held to the deadline. The whole read has
+  one deadline, each read being given what is left of it for one recv.
+  """
+  @spec read_body(Plug.Conn.t(), map()) ::
+          {:ok, binary(), Plug.Conn.t()} | {:error, Error.t(), Plug.Conn.t()}
+  def read_body(conn, config) do
     until = System.monotonic_time(:millisecond) + config.body_timeout_ms
 
     case {Plug.Conn.get_req_header(conn, "content-length"),
@@ -158,6 +173,8 @@ defmodule FlezhaHttp.Handler do
   defp body_timeout(config),
     do: Error.new("http.body_timeout", timeout_ms: config.body_timeout_ms)
 
-  defp busy(config),
-    do: Error.new("http.busy", operator: config.operator, max_waiting: config.max_waiting)
+  @doc "The refusal of a request past `config`'s `max_waiting`."
+  @spec busy(map()) :: Error.t()
+  def busy(config),
+    do: Error.new("http.busy", plugin: config.source_plugin_id, max_waiting: config.max_waiting)
 end

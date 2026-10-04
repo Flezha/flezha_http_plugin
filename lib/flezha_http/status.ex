@@ -73,14 +73,17 @@ defmodule FlezhaHttp.Status do
   defp unfilled_out(message),
     do: Regex.replace(~r/ as '\{[a-z_]+\}'|:? '?\{[a-z_]+\}'?/, message, "")
 
-  @doc "Answer `conn` with `error`: its status, `retry-after` where a retry helps, its document."
-  @spec send_error(Plug.Conn.t(), Error.t()) :: Plug.Conn.t()
-  def send_error(conn, %Error{code: code} = error) do
+  @doc """
+  Answer `conn` with `error`: `status`, or its own, `retry-after` where a retry
+  helps, and its document.
+  """
+  @spec send_error(Plug.Conn.t(), Error.t(), 400..599 | nil) :: Plug.Conn.t()
+  def send_error(conn, %Error{code: code} = error, status \\ nil) do
     conn
     |> Plug.Conn.put_resp_content_type("application/json", nil)
     |> then(
       &if code in @retry_after, do: Plug.Conn.put_resp_header(&1, "retry-after", "1"), else: &1
     )
-    |> Plug.Conn.send_resp(of(error), Error.render(error, :json))
+    |> Plug.Conn.send_resp(status || of(error), Error.render(error, :json))
   end
 end

@@ -41,6 +41,7 @@ defmodule FlezhaHttp.StandIn do
         overwatch: overwatch,
         namespace: "default",
         operator: "gateway",
+        source_plugin_id: "web",
         entry_channel: "http",
         deadline_ms: 1_000,
         max_body_bytes: 1_048_576,

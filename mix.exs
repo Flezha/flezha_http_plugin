@@ -18,10 +18,17 @@ defmodule FlezhaHttp.MixProject do
     ]
   end
 
-  # No `mod`: the provider's declared worker is the plugin's one process, and
+  # No `mod`: each provider's declared worker is its plugin's one process, and
   # the controller supervises it.
   def application do
-    [env: [flezha_providers: %{"http_server" => FlezhaHttp.Provider}]]
+    [
+      env: [
+        flezha_providers: %{
+          "http_server" => FlezhaHttp.Provider,
+          "http_api" => FlezhaHttp.ApiProvider
+        }
+      ]
+    ]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
