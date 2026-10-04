@@ -164,7 +164,7 @@ defmodule FlezhaHttp.Api do
     answer =
       if String.valid?(name),
         do: door(context, config).(name, body),
-        else: {:error, Error.new("admin.unknown_function", function: inspect(name))}
+        else: {:error, Error.new("control.unknown_function", function: inspect(name))}
 
     case answer do
       {:ok, json} -> conn |> named(name) |> send_json(200, json)
@@ -173,7 +173,7 @@ defmodule FlezhaHttp.Api do
   end
 
   # The door, answered within the deadline. A call past it is answered
-  # `admin.timeout` and left to finish, holding its waiting slot until it does:
+  # `control.timeout` and left to finish, holding its waiting slot until it does:
   # stopping an act halfway is worse than an answer the caller no longer waits
   # for.
   defp door(context, config) do
@@ -194,7 +194,7 @@ defmodule FlezhaHttp.Api do
 
         nil ->
           Task.ignore(task)
-          {:error, Error.new("admin.timeout", seconds: config.deadline_ms / 1000)}
+          {:error, Error.new("control.timeout", seconds: config.deadline_ms / 1000)}
       end
     end
   end

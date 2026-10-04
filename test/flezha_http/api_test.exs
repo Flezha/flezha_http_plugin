@@ -183,14 +183,14 @@ defmodule FlezhaHttp.ApiTest do
                200
     end
 
-    test "a call past its deadline answers admin.timeout" do
+    test "a call past its deadline answers control.timeout" do
       slow = fn _, _ -> Process.sleep(500) && {:ok, "[]"} end
 
       conn =
         request(:post, "/v1/call/Operator.list", "[]", [], config(deadline_ms: 100, answer: slow))
 
       assert conn.status == 503
-      assert json(conn)["error"]["code"] == "admin.timeout"
+      assert json(conn)["error"]["code"] == "control.timeout"
     end
   end
 
@@ -231,7 +231,7 @@ defmodule FlezhaHttp.ApiTest do
     test "a name that is not text is an unknown operation, its bytes never echoed" do
       conn = request(:post, "/v1/call/Op" <> <<0xFF, 0xFE>> <> ".list", "[]")
       assert conn.status == 404
-      assert json(conn)["error"]["code"] == "admin.unknown_function"
+      assert json(conn)["error"]["code"] == "control.unknown_function"
       refute_received {:door, _, _, _}
     end
 
@@ -240,7 +240,7 @@ defmodule FlezhaHttp.ApiTest do
       config = config(context: admin, admin: &Flezha.Service.Admin.call/4)
       conn = request(:post, "/v1/call/Controller.stop", "[]", [], config)
       assert conn.status == 404
-      assert json(conn)["error"]["code"] == "admin.unknown_function"
+      assert json(conn)["error"]["code"] == "control.unknown_function"
     end
 
     test "the catalogue lists what the role grants, in the catalogue's form" do
@@ -408,7 +408,7 @@ defmodule FlezhaHttp.ApiTest do
       conn = mcp("tools/call", %{"name" => "dlq_list", "arguments" => %{"nope" => 1}})
       result = json(conn)["result"]
       assert result["isError"]
-      assert result["structuredContent"]["error"]["code"] == "admin.unknown_parameter"
+      assert result["structuredContent"]["error"]["code"] == "control.unknown_parameter"
       refute_received {:door, _, _, _}
     end
 
