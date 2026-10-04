@@ -5,7 +5,7 @@ defmodule FlezhaHttp.Api do
   the request carries. It keeps no list of operations, no policy and no
   dispatch of its own.
 
-  - `POST /mcp`: MCP over Streamable HTTP (`FlezhaHttp.Mcp`).
+  - `POST /mcp`: MCP over Streamable HTTP (`Flezha.Mcp`).
   - `GET /v1/catalogue`: the operations the token's role may call, in the
     catalogue's own form.
   - `POST /v1/call/<Name>`: one operation with a JSON array of arguments,
@@ -23,7 +23,6 @@ defmodule FlezhaHttp.Api do
   alias Flezha.Service.Admin
   alias Flezha.Service.CallerContext
   alias FlezhaHttp.Handler
-  alias FlezhaHttp.Mcp
   alias FlezhaHttp.Server
   alias FlezhaHttp.Status
 
@@ -133,7 +132,19 @@ defmodule FlezhaHttp.Api do
   end
 
   defp mcp(conn, body, context, config) do
-    case Mcp.answer(conn, body, context, door(context, config)) do
+    headers = fn name ->
+      case Plug.Conn.get_req_header(conn, name) do
+        [value] -> value
+        _none_or_several -> nil
+      end
+    end
+
+    case Flezha.Mcp.answer(
+           body,
+           headers,
+           fn -> Admin.catalogue(context) end,
+           door(context, config)
+         ) do
       {status, nil, _tool} -> Plug.Conn.send_resp(conn, status, "")
       {status, answer, nil} -> send_json(conn, status, Jason.encode!(answer))
       {status, answer, tool} -> conn |> named(tool) |> send_json(status, Jason.encode!(answer))

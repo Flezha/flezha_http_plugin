@@ -360,6 +360,17 @@ defmodule FlezhaHttp.ApiTest do
       refute Map.has_key?(by_name, "operator_listen")
     end
 
+    test "the knowledge tools are listed for every role and answer without the door" do
+      listed = for tool <- json(mcp("tools/list"))["result"]["tools"], do: tool["name"]
+      assert Enum.take(listed, 4) == ~w(flezha_guide flezha_sdk_example flezha_error flezha_docs)
+
+      conn =
+        mcp("tools/call", %{"name" => "flezha_error", "arguments" => %{"code" => "dlq.not_found"}})
+
+      assert json(conn)["result"]["structuredContent"]["code"] == "dlq.not_found"
+      refute_received {:door, _, _, _}
+    end
+
     test "tools/call maps the named arguments onto the door's array" do
       answer = fn "Operator.list", ["default"] -> {:ok, ~s([{"id":"echo"}])} end
 

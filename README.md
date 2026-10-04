@@ -23,8 +23,8 @@ lib/flezha_http/handler.ex    the Plug: body, request envelope, the call, the an
 lib/flezha_http/envelope.ex   the request envelope and the answer decoding
 lib/flezha_http/events.ex     a stream: the listener and the server-sent events
 lib/flezha_http/status.ex     the HTTP status of every error code
-lib/flezha_http/api.ex        the http_api Plug: origin, bearer token, routes, the door
-lib/flezha_http/mcp.ex        MCP over Streamable HTTP: JSON-RPC, the tools, their calls
+lib/flezha_http/api.ex        the http_api Plug: origin, bearer token, routes, the door;
+                              MCP itself is the core's Flezha.Mcp, shared with `flz mcp`
 test/flezha_http/             unit tests (Plug.Test), server tests on a real Bandit,
                               the catalogue and docs-table checks
 test/e2e/                     the chat fixture (an Elixir SDK runner) and run.sh
