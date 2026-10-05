@@ -4,7 +4,7 @@ The HTTP plugins for Flezha: a plugin package, `flezha_http`, with two providers
 and Plug.
 
 - `http_server` puts a relay behind an HTTP/1.1 port. Every request becomes one outside
-  call of the relay, the first sink output the call causes becomes the HTTP response, and a
+  call of the relay, the first output the call causes becomes the HTTP response, and a
   stream answer turns the connection into server-sent events of another relay's parts
   and outputs. Its contract is the core's page `docs/plugins/http_server.md`.
 - `http_api` serves the controller's published operations to a bearer token's principal,

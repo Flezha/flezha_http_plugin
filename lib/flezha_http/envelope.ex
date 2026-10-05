@@ -1,7 +1,7 @@
 defmodule FlezhaHttp.Envelope do
   @moduledoc """
   The two JSON envelopes between HTTP and the host relay: the request a call
-  carries in, and the answer its sink output gives back.
+  carries in, and the answer its output gives back.
 
   The request is `method`, `path` and `query` as received, the `headers` the
   plugin was told to pass, and the body as text (`body`) or bytes

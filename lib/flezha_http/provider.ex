@@ -2,7 +2,7 @@ defmodule FlezhaHttp.Provider do
   @moduledoc """
   The `http_server` provider: an HTTP/1.1 server in front of the relay it is
   enabled on. Every request becomes one outside call of that relay on its
-  entry channel, and the first sink output the call causes becomes the HTTP
+  entry channel, and the first output the call causes becomes the HTTP
   response, or a stream of another relay's events (`FlezhaHttp.Events`).
 
   The contract, the envelopes and the option table are the core's
@@ -40,7 +40,7 @@ defmodule FlezhaHttp.Provider do
       answer_channel: [
         type: :string,
         doc:
-          "The relay's channel whose output answers a request; the first output on a sink when unset"
+          "The relay's channel whose output answers a request; the first output when unset"
       ],
       deadline_ms: [
         type: :int,

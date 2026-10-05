@@ -4,16 +4,16 @@ defmodule Chat do
 
     * `gateway` (flow, keyed by user): the plugin's host. It routes each
       request envelope, keeps each user's session register and daily token
-      budget, answers every request on a sink, and calls the `agent` factory to
-      open a session or to hand it a message, answered from the agent's sink
+      budget, answers every request on an output, and calls the `agent` factory to
+      open a session or to hand it a message, answered from the agent's output
       `usage`.
     * `agent` (steps, `per_input`, `keep_progress`, kept locally, sleeping five
       seconds after its last turn): one per session. A turn sends one part per word 100 ms apart,
-      emits the answer on the sink `events`, and emits the tokens it used on the
-      sink `usage`, which answers the gateway's call; the message `fail` fails
+      emits the answer on the output `events`, and emits the tokens it used on the
+      output `usage`, which answers the gateway's call; the message `fail` fails
       the turn for good.
     * `pinger` (steps, `per_input`): answers every request `pong`.
-    * `echo` (flow): emits every input on the sink `out`.
+    * `echo` (flow): emits every input on the output `out`.
   """
 
   @budget 40
@@ -172,7 +172,7 @@ defmodule Chat do
         |> into(Chat.Account)
         |> named("account")
 
-      account |> filter(&Chat.answer?/1) |> into(Chat.Answer) |> sink()
+      account |> filter(&Chat.answer?/1) |> into(Chat.Answer) |> output()
 
       account
       |> filter(&Chat.open?/1)
@@ -207,9 +207,9 @@ defmodule Chat do
       c
       |> input("turn")
       |> into(Chat.Agent.Turn)
-      |> sink("events")
+      |> output("events")
       |> into(Chat.Agent.Usage)
-      |> sink("usage")
+      |> output("usage")
     end
 
     defmodule Turn do
@@ -259,7 +259,7 @@ defmodule Chat do
       |> input("http")
       |> key_by(&Jason.decode!(&1)["path"])
       |> into(Chat.Pinger.Pong)
-      |> sink()
+      |> output()
     end
 
     defmodule Pong do
@@ -276,7 +276,7 @@ defmodule Chat do
 
   defmodule Echo do
     @moduledoc false
-    use Flezha.SDK.Relay, factory_id: "echo", input: "in", sink: "out"
+    use Flezha.SDK.Relay, factory_id: "echo", input: "in", output: "out"
 
     def run(input, state, ctx) do
       emit(ctx, input)

@@ -28,7 +28,7 @@ defmodule FlezhaHttp.StandIn do
     {:noreply, state}
   end
 
-  @doc "An answer envelope as the host's sink output hands it back."
+  @doc "An answer envelope as the host's output hands it back."
   def ok(envelope) when is_map(envelope),
     do: {:ok, Jason.encode!(envelope), %{"channel" => "out"}}
 
