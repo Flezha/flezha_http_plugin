@@ -49,6 +49,12 @@ defmodule FlezhaHttp.HandlerTest do
       refute Map.has_key?(envelope, "body")
     end
 
+    test "naming the answer channel the plugin was given" do
+      serve(conn(:get, "/"), &echo/1, answer_channel: "answers")
+      assert_received {:called, _payload, metadata, _deadline}
+      assert metadata == %{"channel" => "http", "flz.call_answer_channel" => "answers"}
+    end
+
     test "whose metadata a client cannot reach" do
       conn(:get, "/?flz.msg_id=y")
       |> Plug.Conn.put_req_header("flz.reply_to", "x")

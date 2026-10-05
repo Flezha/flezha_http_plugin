@@ -70,7 +70,7 @@ defmodule FlezhaHttp.Handler do
     case Flezha.Plugin.Host.inject(
            config.overwatch,
            Jason.encode!(envelope),
-           %{"channel" => config.entry_channel},
+           call_metadata(config),
            :call,
            config.deadline_ms
          ) do
@@ -78,6 +78,11 @@ defmodule FlezhaHttp.Handler do
       {:error, %Error{} = error} -> {:error, Status.public(error), conn}
     end
   end
+
+  defp call_metadata(%{answer_channel: channel} = config) when is_binary(channel),
+    do: %{"channel" => config.entry_channel, "flz.call_answer_channel" => channel}
+
+  defp call_metadata(config), do: %{"channel" => config.entry_channel}
 
   defp decode(payload, conn, config) do
     case Envelope.answer(payload) do

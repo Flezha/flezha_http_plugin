@@ -4,12 +4,14 @@ defmodule Chat do
 
     * `gateway` (flow, keyed by user): the plugin's host. It routes each
       request envelope, keeps each user's session register and daily token
-      budget, answers every request through `response()`, and calls the `agent`
-      factory to open a session or to hand it a message.
+      budget, answers every request on a sink, and calls the `agent` factory to
+      open a session or to hand it a message, answered from the agent's sink
+      `usage`.
     * `agent` (steps, `per_input`, `keep_progress`, kept locally, sleeping five
       seconds after its last turn): one per session. A turn sends one part per word 100 ms apart,
-      emits the answer on the sink `events`, and answers the gateway's call with
-      the tokens it used; the message `fail` fails the turn for good.
+      emits the answer on the sink `events`, and emits the tokens it used on the
+      sink `usage`, which answers the gateway's call; the message `fail` fails
+      the turn for good.
     * `pinger` (steps, `per_input`): answers every request `pong`.
     * `echo` (flow): emits every input on the sink `out`.
   """
@@ -159,7 +161,7 @@ defmodule Chat do
     @moduledoc false
     use Flezha.SDK.Relay, factory_id: "gateway"
 
-    @call [deadline_ms: 120_000, decode: &Jason.decode/1]
+    @call [deadline_ms: 120_000, answer_channel: "usage", decode: &Jason.decode/1]
 
     @impl true
     def channels(c) do
@@ -170,7 +172,7 @@ defmodule Chat do
         |> into(Chat.Account)
         |> named("account")
 
-      account |> filter(&Chat.answer?/1) |> into(Chat.Answer) |> response()
+      account |> filter(&Chat.answer?/1) |> into(Chat.Answer) |> sink()
 
       account
       |> filter(&Chat.open?/1)
@@ -207,7 +209,7 @@ defmodule Chat do
       |> into(Chat.Agent.Turn)
       |> sink("events")
       |> into(Chat.Agent.Usage)
-      |> response()
+      |> sink("usage")
     end
 
     defmodule Turn do
@@ -257,7 +259,7 @@ defmodule Chat do
       |> input("http")
       |> key_by(&Jason.decode!(&1)["path"])
       |> into(Chat.Pinger.Pong)
-      |> response()
+      |> sink()
     end
 
     defmodule Pong do
