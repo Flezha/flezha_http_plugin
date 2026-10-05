@@ -1,6 +1,6 @@
 defmodule FlezhaHttp.Envelope do
   @moduledoc """
-  The two JSON envelopes between HTTP and the host operator: the request a call
+  The two JSON envelopes between HTTP and the host relay: the request a call
   carries in, and the answer its `response()` gives back.
 
   The request is `method`, `path` and `query` as received, the `headers` the
@@ -36,7 +36,7 @@ defmodule FlezhaHttp.Envelope do
 
   @doc """
   Put `bytes` under `key` as text when they are valid UTF-8, otherwise under
-  `<key>_base64`, the rule `flz operator listen --json` follows.
+  `<key>_base64`, the rule `flz relay listen --json` follows.
   """
   @spec put_bytes(map(), String.t(), binary()) :: map()
   def put_bytes(map, key, bytes) do

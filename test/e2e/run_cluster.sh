@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The plugin following its operator from one controller to another:
+# The plugin following its relay from one controller to another:
 #
 #   test/e2e/run_cluster.sh
 #
@@ -46,9 +46,9 @@ stop_all() {
 trap stop_all EXIT
 
 gateway_node() {
-  on "${1:-B}" flz operator list --json 2>/dev/null | python3 -c '
+  on "${1:-B}" flz relay list --json 2>/dev/null | python3 -c '
 import json, sys
-print(next((o.get("node", "") for o in json.load(sys.stdin).get("operators", []) if o.get("id") == "gateway"), ""))'
+print(next((o.get("node", "") for o in json.load(sys.stdin).get("relays", []) if o.get("id") == "gateway"), ""))'
 }
 
 say_release "$REL"
@@ -69,7 +69,7 @@ say "the gateway on A"
 build_chat
 on A start_runner runner_a default
 web='[{"name":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","channel":"http","pass_headers":"x-api-key","heartbeat_ms":"1000"}}]'
-on A start_operator gateway gateway --plugins "$web"
+on A start_relay gateway gateway --plugins "$web"
 until_ok 30 "curl -s -o /dev/null $GW/no-route" || { say "nothing listens on 18080"; exit 1; }
 before=$(gateway_node A)
 
@@ -87,7 +87,7 @@ until_ok 60 "[ \$(on B flz runner list 2>/dev/null | grep -c ' default_') -ge 2 
 until_ok 60 "on A flzvm rpc 'IO.inspect(Flezha.Cluster.Directory.hub_nodes(\"default\"))' | grep -q '$NODE_B'" ||
   { say "B never joined the namespace hub"; exit 1; }
 on A flz controller stop >"$TMP/out/stop-a.log" 2>&1
-# The stop ends A's VM itself once its drain has handed the operators over.
+# The stop ends A's VM itself once its drain has handed the relays over.
 until_ok 60 "! pgrep -f 'beam.smp.* $NODE_A@'" || say "A is still running after its stop"
 
 if until_ok 10 "! kill -0 $(cat "$TMP/a.stream")"; then
@@ -108,7 +108,7 @@ fi
 # The session is streamed through B's server and handed a turn on B directly:
 # the gateway's own keyed state does not survive the move (see the dev note).
 stream b "/raw/$session/events"
-if stream_open b 10 && on B flz operator send "$session" --channel turn --text '{"text":"after the move"}' >/dev/null &&
+if stream_open b 10 && on B flz relay send "$session" --channel turn --text '{"text":"after the move"}' >/dev/null &&
   until_ok 20 "[ \$(events b output) -ge 1 ]" && [ "$(payloads b part | tr '\n' ' ')" = "after the move " ]; then
   pass 3 "a new stream through B follows $session, which moved with it and turned again"
 else

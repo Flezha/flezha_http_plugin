@@ -14,7 +14,7 @@ defmodule Chat.Application do
     children = [
       {Flezha.SDK,
        namespace: namespace,
-       operators: [Chat.Gateway, Chat.Agent, Chat.Pinger, Chat.Echo],
+       relays: [Chat.Gateway, Chat.Agent, Chat.Pinger, Chat.Echo],
        transport: :uds}
     ]
 

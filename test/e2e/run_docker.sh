@@ -77,14 +77,14 @@ say "the runner on the host, the gateway on 0.0.0.0"
 build_chat
 FLEZHA_SOCKET_FILES_PATH=$TMP/s start_runner runner default
 web='[{"name":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","bind":"0.0.0.0","channel":"http","pass_headers":"x-api-key"}}]'
-until_ok 60 "ctl operator start gateway --id gateway --plugins '$web'" || { say "gateway did not start"; exit 1; }
+until_ok 60 "ctl relay start gateway --id gateway --plugins '$web'" || { say "gateway did not start"; exit 1; }
 until_ok 30 "curl -s -o /dev/null $GW/no-route" || { say "the published port does not answer"; exit 1; }
 check_a
 check_b
 
 say "the default bind inside the container"
 ctl plugin disable web >/dev/null
-ctl plugin enable web2 http_server --operator_id=gateway --hook=on_terminate --Xport=18080 --Xchannel=http \
+ctl plugin enable web2 http_server --relay_id=gateway --hook=on_terminate --Xport=18080 --Xchannel=http \
   >"$TMP/out/loopback.log" 2>&1
 status=$(curl -s -o /dev/null -w '%{http_code}' -m 2 "$GW/no-route")
 if grep -q 'enabled successfully' "$TMP/out/loopback.log" && [ "$status" = 000 ]; then

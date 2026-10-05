@@ -4,7 +4,7 @@ defmodule FlezhaHttp.ApiProviderTest do
   alias Flezha.Plugin.ProviderBehaviour.Options
   alias FlezhaHttp.ApiProvider
 
-  @host %{source_namespace: "_system", source_operator_id: nil, source_plugin_id: "api"}
+  @host %{source_namespace: "_system", source_relay_id: nil, source_plugin_id: "api"}
 
   defp prepare(opts) do
     with {:ok, opts} <- Options.normalise_opts(ApiProvider, opts) do

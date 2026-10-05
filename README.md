@@ -3,9 +3,9 @@
 The HTTP plugins for Flezha: a plugin package, `flezha_http`, with two providers on Bandit
 and Plug.
 
-- `http_server` puts an operator behind an HTTP/1.1 port. Every request becomes one outside
-  call of the operator, the operator's `response()` answer becomes the HTTP response, and a
-  stream answer turns the connection into server-sent events of another operator's parts
+- `http_server` puts a relay behind an HTTP/1.1 port. Every request becomes one outside
+  call of the relay, the relay's `response()` answer becomes the HTTP response, and a
+  stream answer turns the connection into server-sent events of another relay's parts
   and outputs. Its contract is the core's page `docs/plugins/http_server.md`.
 - `http_api` serves the controller's published operations to a bearer token's principal,
   as MCP tools at `POST /mcp` and as plain JSON under `/v1`. It is a controller plugin,
@@ -44,7 +44,7 @@ RUSTLER_SKIP_COMPILATION=true mix format --check-formatted
 
 `RUSTLER_SKIP_COMPILATION=true` keeps the core's native library out of the build: a plugin
 never loads it. `mix test` runs with `--no-start`, so no controller boots; the tests start
-Bandit alone and stand in for the operator. The catalogue test fails when a code the plugin
+Bandit alone and stand in for the relay. The catalogue test fails when a code the plugin
 uses is missing from the core's `flz_transport/errors.json`, and the docs test when the
 option table of `docs/plugins/http_server.md` or `docs/plugins/http_api.md` differs from
 its provider's declaration, printing the table to put there.
@@ -76,13 +76,13 @@ flz controller stop && flz controller start
 flz plugin list --installed
 ```
 
-Then enable `http_server` on an operator as `docs/plugins/http_server.md` shows.
+Then enable `http_server` on a relay as `docs/plugins/http_server.md` shows.
 
 ## The end-to-end run
 
 `test/e2e/run.sh` packages the plugin, installs it into a controller release under a
 temporary plugin root, starts the controller and the chat fixture's runners, and checks the
-plugin against a real release: requests, streams, bounds, errors, both operator kinds, a
+plugin against a real release: requests, streams, bounds, errors, both relay kinds, a
 restarted Overwatch and a disabled plugin. It prints PASS or FAIL per check, cleans up
 everything it started, and exits non-zero on any failure.
 

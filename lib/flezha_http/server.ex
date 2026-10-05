@@ -5,7 +5,7 @@ defmodule FlezhaHttp.Server do
   (`plug`, `FlezhaHttp.Handler` by default), over TLS when they name a
   `tls_certfile` and a `tls_keyfile`.
 
-  It follows its host: it stops when the host (an operator's Overwatch, or a
+  It follows its host: it stops when the host (a relay's Overwatch, or a
   controller plugin's running copy) goes away,
   stops Bandit before its own stop returns so a replacement can bind the port at
   once, and is not reused by a new Overwatch while its own host is gone. A port
@@ -116,7 +116,7 @@ defmodule FlezhaHttp.Server do
     Map.merge(opts, %{
       overwatch: host,
       namespace: opts.source_namespace,
-      operator: opts.source_operator_id,
+      relay: opts.source_relay_id,
       counters: counters,
       body_timeout_ms: Map.get(opts, :body_timeout_ms, @body_timeout_ms),
       listen: Map.get(opts, :listen, &Flezha.Service.Listener.listen/4)

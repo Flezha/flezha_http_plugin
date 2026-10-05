@@ -1,7 +1,7 @@
 defmodule FlezhaHttp.Handler do
   @moduledoc """
   The one Plug: every request is read, turned into the request envelope and made
-  one outside call of the host operator, whose answer becomes the response or a
+  one outside call of the host relay, whose answer becomes the response or a
   stream. It has no routes; the host's graph routes.
 
   It logs the method, the path, the status and the duration at debug level, and
@@ -26,7 +26,7 @@ defmodule FlezhaHttp.Handler do
 
   @impl true
   def call(conn, config),
-    do: logged(conn, &serve(&1, config), fn _conn -> " operator=#{config.operator}" end)
+    do: logged(conn, &serve(&1, config), fn _conn -> " relay=#{config.relay}" end)
 
   @doc """
   `serve` `conn`, then log its method, path, status, duration and `detail` of
@@ -86,11 +86,10 @@ defmodule FlezhaHttp.Handler do
 
       {:error, reason} ->
         Logger.warning(
-          "[FlezhaHttp] operator #{config.operator} answered an invalid envelope: #{reason}"
+          "[FlezhaHttp] relay #{config.relay} answered an invalid envelope: #{reason}"
         )
 
-        {:error, Error.new("http.answer_invalid", operator: config.operator, reason: reason),
-         conn}
+        {:error, Error.new("http.answer_invalid", relay: config.relay, reason: reason), conn}
     end
   end
 

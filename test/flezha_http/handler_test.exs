@@ -103,7 +103,7 @@ defmodule FlezhaHttp.HandlerTest do
     end
   end
 
-  test "the waiting cap refuses at once, and the operator receives only what it admits" do
+  test "the waiting cap refuses at once, and the relay receives only what it admits" do
     test = self()
 
     answer = fn _ ->
@@ -182,7 +182,7 @@ defmodule FlezhaHttp.HandlerTest do
           {"a key forging a log line", ~s({"status":200,"x\\n[error] forged":1}),
            ~s("x\\n[error] forged")}
         ] do
-      test "#{name}, logged once with the operator and the rule" do
+      test "#{name}, logged once with the relay and the rule" do
         listen = fn _, _, _, _ -> flunk("no listener may be attached") end
 
         log =
@@ -196,10 +196,10 @@ defmodule FlezhaHttp.HandlerTest do
         assert_received {:conn, conn}
         assert conn.status == 502
         assert %{"code" => "http.answer_invalid", "details" => details} = error_body(conn)
-        assert details["operator"] == "gateway"
+        assert details["relay"] == "gateway"
         assert details["reason"] =~ unquote(fragment)
         assert [line] = String.split(log, "\n", trim: true) |> Enum.filter(&(&1 =~ "[warning]"))
-        assert line =~ "operator gateway answered an invalid envelope"
+        assert line =~ "relay gateway answered an invalid envelope"
         assert line =~ unquote(fragment)
       end
     end
@@ -216,7 +216,7 @@ defmodule FlezhaHttp.HandlerTest do
           {"call.not_accepted", 409, []}
         ] do
       test "#{code} is #{status}" do
-        error = Error.new(unquote(code), operator: "gateway", deadline_ms: 1_000)
+        error = Error.new(unquote(code), relay: "gateway", deadline_ms: 1_000)
         conn = serve(conn(:get, "/nothing"), fn _ -> {:error, error} end)
 
         assert conn.status == unquote(status)
@@ -229,7 +229,7 @@ defmodule FlezhaHttp.HandlerTest do
     test "a failure's body carries neither the author's text, nor the entry, nor a hint" do
       error =
         Error.new("call.failed",
-          operator: "gateway",
+          relay: "gateway",
           dlq_ref: "dlq-9",
           error: "upstream key sk-123 rejected"
         )
@@ -238,8 +238,8 @@ defmodule FlezhaHttp.HandlerTest do
 
       assert conn.status == 500
       assert %{"code" => "call.failed", "hint" => nil, "details" => details} = error_body(conn)
-      assert details == %{"operator" => "gateway"}
-      assert error_body(conn)["message"] == "operator 'gateway' dead-lettered the call's input"
+      assert details == %{"relay" => "gateway"}
+      assert error_body(conn)["message"] == "relay 'gateway' dead-lettered the call's input"
       refute conn.resp_body =~ "sk-123"
       refute conn.resp_body =~ "dlq-9"
     end

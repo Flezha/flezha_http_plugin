@@ -125,7 +125,7 @@ defmodule FlezhaHttp.ApiTest do
   describe "the origin guard" do
     test "a page on another origin is refused before anything runs" do
       conn =
-        request(:post, "/v1/call/Operator.list", ~s(["default"]), [
+        request(:post, "/v1/call/Relay.list", ~s(["default"]), [
           {"origin", "https://evil.test"}
         ])
 
@@ -146,7 +146,7 @@ defmodule FlezhaHttp.ApiTest do
 
   describe "limits" do
     test "a body over the cap is a 413" do
-      conn = request(:post, "/v1/call/Operator.list", String.duplicate("a", 2_048))
+      conn = request(:post, "/v1/call/Relay.list", String.duplicate("a", 2_048))
       assert conn.status == 413
       assert json(conn)["error"]["code"] == "http.body_too_large"
     end
@@ -154,7 +154,7 @@ defmodule FlezhaHttp.ApiTest do
     test "a call past the waiting cap is a 503 naming the plugin" do
       config = config(max_waiting: 1)
       :atomics.put(config.counters, 1, 1)
-      conn = request(:post, "/v1/call/Operator.list", ~s(["default"]), [], config)
+      conn = request(:post, "/v1/call/Relay.list", ~s(["default"]), [], config)
       assert conn.status == 503
       assert %{"code" => "http.busy", "details" => %{"plugin" => "api"}} = json(conn)["error"]
       refute_received {:door, _, _, _}
@@ -170,16 +170,16 @@ defmodule FlezhaHttp.ApiTest do
       end
 
       config = config(max_waiting: 1, deadline_ms: 50, answer: slow)
-      assert request(:post, "/v1/call/Operator.list", "[]", [], config).status == 503
+      assert request(:post, "/v1/call/Relay.list", "[]", [], config).status == 503
       assert_receive {:running, running}
 
-      conn = request(:post, "/v1/call/Operator.list", "[]", [], config)
+      conn = request(:post, "/v1/call/Relay.list", "[]", [], config)
       assert json(conn)["error"]["code"] == "http.busy"
 
       send(running, :finish)
       Process.sleep(50)
 
-      assert request(:post, "/v1/call/Operator.list", "[]", [], config(max_waiting: 1)).status ==
+      assert request(:post, "/v1/call/Relay.list", "[]", [], config(max_waiting: 1)).status ==
                200
     end
 
@@ -187,7 +187,7 @@ defmodule FlezhaHttp.ApiTest do
       slow = fn _, _ -> Process.sleep(500) && {:ok, "[]"} end
 
       conn =
-        request(:post, "/v1/call/Operator.list", "[]", [], config(deadline_ms: 100, answer: slow))
+        request(:post, "/v1/call/Relay.list", "[]", [], config(deadline_ms: 100, answer: slow))
 
       assert conn.status == 503
       assert json(conn)["error"]["code"] == "control.timeout"
@@ -200,7 +200,7 @@ defmodule FlezhaHttp.ApiTest do
             {:get, "/mcp", "POST"},
             {:delete, "/mcp", "POST"},
             {:post, "/v1/catalogue", "GET"},
-            {:get, "/v1/call/Operator.list", "POST"}
+            {:get, "/v1/call/Relay.list", "POST"}
           ] do
         conn = request(method, path)
         assert conn.status == 405
@@ -213,12 +213,12 @@ defmodule FlezhaHttp.ApiTest do
 
   describe "the plain JSON form" do
     test "a call is the door's, with the token's context and the array as written" do
-      answer = fn "Operator.list", _ -> {:ok, ~s([{"id":"echo"}])} end
-      conn = request(:post, "/v1/call/Operator.list", ~s(["default"]), [], config(answer: answer))
+      answer = fn "Relay.list", _ -> {:ok, ~s([{"id":"echo"}])} end
+      conn = request(:post, "/v1/call/Relay.list", ~s(["default"]), [], config(answer: answer))
 
       assert conn.status == 200
       assert json(conn) == [%{"id" => "echo"}]
-      assert_received {:door, "Operator.list", ~s(["default"]), @viewer}
+      assert_received {:door, "Relay.list", ~s(["default"]), @viewer}
     end
 
     test "a failure answers its error object with the status of its class" do
@@ -246,14 +246,14 @@ defmodule FlezhaHttp.ApiTest do
     test "the catalogue lists what the role grants, in the catalogue's form" do
       names = for op <- json(request(:get, "/v1/catalogue"))["operations"], do: op["name"]
 
-      assert "Operator.list" in names
-      refute "Operator.start" in names
+      assert "Relay.list" in names
+      refute "Relay.start" in names
       refute "Dlq.list" in names
 
       ops = json(request(:get, "/v1/catalogue", "", [], config(context: @ops)))["operations"]
-      refute Enum.any?(ops, &(&1["name"] in ["Controller.stop", "Operator.listen"]))
+      refute Enum.any?(ops, &(&1["name"] in ["Controller.stop", "Relay.listen"]))
 
-      assert %{"name" => "Dlq.list", "args" => [%{"name" => "operator_class"}]} =
+      assert %{"name" => "Dlq.list", "args" => [%{"name" => "relay_class"}]} =
                Enum.find(ops, &(&1["name"] == "Dlq.list"))
     end
   end
@@ -347,17 +347,17 @@ defmodule FlezhaHttp.ApiTest do
       assert %{
                "inputSchema" => %{
                  "type" => "object",
-                 "properties" => %{"operator_class" => %{"type" => "string"}},
+                 "properties" => %{"relay_class" => %{"type" => "string"}},
                  "additionalProperties" => false
                },
                "annotations" => %{"readOnlyHint" => true}
              } = by_name["dlq_list"]
 
       refute Map.has_key?(by_name["dlq_list"]["inputSchema"], "required")
-      assert "operator_list" in viewer
-      refute Enum.any?(viewer, &(&1 in ["operator_start", "dlq_list"]))
+      assert "relay_list" in viewer
+      refute Enum.any?(viewer, &(&1 in ["relay_start", "dlq_list"]))
       refute Map.has_key?(by_name, "controller_stop")
-      refute Map.has_key?(by_name, "operator_listen")
+      refute Map.has_key?(by_name, "relay_listen")
     end
 
     test "the knowledge tools are listed for every role and answer without the door" do
@@ -372,12 +372,12 @@ defmodule FlezhaHttp.ApiTest do
     end
 
     test "tools/call maps the named arguments onto the door's array" do
-      answer = fn "Operator.list", ["default"] -> {:ok, ~s([{"id":"echo"}])} end
+      answer = fn "Relay.list", ["default"] -> {:ok, ~s([{"id":"echo"}])} end
 
       conn =
         mcp(
           "tools/call",
-          %{"name" => "operator_list", "arguments" => %{"namespace" => "default"}},
+          %{"name" => "relay_list", "arguments" => %{"namespace" => "default"}},
           config: config(answer: answer)
         )
 
@@ -528,7 +528,7 @@ defmodule FlezhaHttp.ApiTest do
         max_connections: 4,
         overwatcher_pid: host,
         source_namespace: "_system",
-        source_operator_id: nil,
+        source_relay_id: nil,
         plug: Api,
         tls_certfile: cert,
         tls_keyfile: key
@@ -554,7 +554,7 @@ defmodule FlezhaHttp.ApiTest do
 
     log =
       capture_log([level: :debug], fn ->
-        request(:post, "/v1/call/Operator.list", secret_body)
+        request(:post, "/v1/call/Relay.list", secret_body)
         request(:get, "/v1/catalogue")
         request(:get, "/mcp")
 
@@ -566,14 +566,14 @@ defmodule FlezhaHttp.ApiTest do
 
         mcp("tools/call", %{
           "name" => "dlq_list",
-          "arguments" => %{"operator_class" => "secret-body-value-91c2"}
+          "arguments" => %{"relay_class" => "secret-body-value-91c2"}
         })
 
         anonymous(:post, "/mcp", [{"authorization", "Bearer " <> @token <> "x"}])
         request(:get, "/nothing", "", [{"origin", "https://secret-origin.test"}])
       end)
 
-    assert log =~ "[FlezhaHttp] POST /v1/call/Operator.list 200"
+    assert log =~ "[FlezhaHttp] POST /v1/call/Relay.list 200"
     assert log =~ "tool=Dlq.list"
     refute log =~ @token
     refute log =~ "secret-body-value-91c2"

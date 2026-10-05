@@ -157,7 +157,7 @@ defmodule Chat do
 
   defmodule Gateway do
     @moduledoc false
-    use Flezha.SDK.Operator, factory_id: "gateway"
+    use Flezha.SDK.Relay, factory_id: "gateway"
 
     @call [deadline_ms: 120_000, decode: &Jason.decode/1]
 
@@ -194,7 +194,7 @@ defmodule Chat do
 
   defmodule Agent do
     @moduledoc false
-    use Flezha.SDK.Operator,
+    use Flezha.SDK.Relay,
       factory_id: "agent",
       run: {:steps, each: :per_input, on_failure: :keep_progress},
       durable: {:local, sleep_after: 5_000},
@@ -248,7 +248,7 @@ defmodule Chat do
 
   defmodule Pinger do
     @moduledoc false
-    use Flezha.SDK.Operator, factory_id: "pinger", run: {:steps, each: :per_input}
+    use Flezha.SDK.Relay, factory_id: "pinger", run: {:steps, each: :per_input}
 
     # Keyed on its entry, so the end-to-end run can start it as a partition group.
     @impl true
@@ -274,7 +274,7 @@ defmodule Chat do
 
   defmodule Echo do
     @moduledoc false
-    use Flezha.SDK.Operator, factory_id: "echo", input: "in", sink: "out"
+    use Flezha.SDK.Relay, factory_id: "echo", input: "in", sink: "out"
 
     def run(input, state, ctx) do
       emit(ctx, input)

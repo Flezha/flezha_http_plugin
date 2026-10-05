@@ -21,7 +21,7 @@ defmodule FlezhaHttp.ServerTest do
       bind: "127.0.0.1",
       overwatcher_pid: ctx.overwatch,
       source_namespace: "default",
-      source_operator_id: "gateway"
+      source_relay_id: "gateway"
     })
   end
 

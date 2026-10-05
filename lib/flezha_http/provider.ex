@@ -1,9 +1,9 @@
 defmodule FlezhaHttp.Provider do
   @moduledoc """
-  The `http_server` provider: an HTTP/1.1 server in front of the operator it is
-  enabled on. Every request becomes one outside call of that operator on its
-  entry channel, and the operator's `response()` answer becomes the HTTP
-  response, or a stream of another operator's events (`FlezhaHttp.Events`).
+  The `http_server` provider: an HTTP/1.1 server in front of the relay it is
+  enabled on. Every request becomes one outside call of that relay on its
+  entry channel, and the relay's `response()` answer becomes the HTTP
+  response, or a stream of another relay's events (`FlezhaHttp.Events`).
 
   The contract, the envelopes and the option table are the core's
   `docs/plugins/http_server.md`.
@@ -42,7 +42,7 @@ defmodule FlezhaHttp.Provider do
         default: 30_000,
         min: 100,
         max: 600_000,
-        doc: "How long a request waits for the operator's answer, 100 to 600000"
+        doc: "How long a request waits for the relay's answer, 100 to 600000"
       ],
       max_body_bytes: [
         type: :int,
@@ -91,7 +91,7 @@ defmodule FlezhaHttp.Provider do
         min: 0,
         max: 60_000,
         doc:
-          "How long a stream waits for the operator it names to exist, up to 60000; 0 answers 404 at once"
+          "How long a stream waits for the relay it names to exist, up to 60000; 0 answers 404 at once"
       ]
     ],
     worker: [
@@ -139,10 +139,10 @@ defmodule FlezhaHttp.Provider do
       else: ProviderBehaviour.refuse_value(:pass_headers, Enum.join(names, ","))
   end
 
-  # Two operators on one node never share a server.
+  # Two relays on one node never share a server.
   @impl true
   def worker_specs(opts),
-    do: [{{opts.source_namespace, opts.source_operator_id, opts.source_plugin_id}, opts}]
+    do: [{{opts.source_namespace, opts.source_relay_id, opts.source_plugin_id}, opts}]
 
   @doc "The server drives itself; the hook is there because a plugin spec must name one."
   @impl true

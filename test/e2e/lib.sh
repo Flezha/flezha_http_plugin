@@ -94,15 +94,15 @@ stop_runner() {
   until_ok 10 "! kill -0 $pid" || kill -KILL -- "-$pid" 2>/dev/null
 }
 
-# `start_operator <factory> <id> [flags...]`, retried until a runner serves the
+# `start_relay <factory> <id> [flags...]`, retried until a runner serves the
 # factory; an attempt that started it but answered late is not started twice.
-start_operator() {
-  local id=$2 args=(operator start "$1" --id "$2")
+start_relay() {
+  local id=$2 args=(relay start "$1" --id "$2")
   shift 2
   args+=("$@")
   for _ in $(seq 60); do
     flz "${args[@]}" >>"$TMP/out/start-$id.log" 2>&1 && return 0
-    [ "$(operator_json "$id")" != "{}" ] && return 0
+    [ "$(relay_json "$id")" != "{}" ] && return 0
     sleep 1
   done
   say "$id did not start: $(tail -3 "$TMP/out/start-$id.log")"
@@ -153,9 +153,9 @@ for line in open(sys.argv[1]):
 PY
 }
 
-# The entry of one operator in `flz operator info --json`, as JSON.
-operator_json() {
-  flz operator info "$1" --json 2>/dev/null | python3 -c '
+# The entry of one relay in `flz relay info --json`, as JSON.
+relay_json() {
+  flz relay info "$1" --json 2>/dev/null | python3 -c '
 import json, sys
 def walk(node):
     if isinstance(node, dict):
@@ -169,7 +169,7 @@ def walk(node):
 print(json.dumps(next(walk(json.load(sys.stdin)), {})))' "$1"
 }
 
-listeners() { operator_json "$1" | grep -o '"io_listener_' | wc -l; }
+listeners() { relay_json "$1" | grep -o '"io_listener_' | wc -l; }
 
 # End every stream this run opened.
 stop_streams() {

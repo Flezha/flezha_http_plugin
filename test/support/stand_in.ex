@@ -1,6 +1,6 @@
 defmodule FlezhaHttp.StandIn do
   @moduledoc """
-  A process standing in for the host operator's Overwatch: it answers the outside
+  A process standing in for the host relay's Overwatch: it answers the outside
   call `Flezha.Plugin.Host.inject/5` sends in `:call` mode with what `answer`
   returns for the payload, and reports each call to the test process.
   """
@@ -40,7 +40,7 @@ defmodule FlezhaHttp.StandIn do
       %{
         overwatch: overwatch,
         namespace: "default",
-        operator: "gateway",
+        relay: "gateway",
         source_plugin_id: "web",
         entry_channel: "http",
         deadline_ms: 1_000,

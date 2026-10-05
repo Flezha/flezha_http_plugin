@@ -5,7 +5,7 @@ defmodule FlezhaHttp.StatusTest do
   alias FlezhaHttp.Status
 
   @details %{
-    "operator" => "gateway",
+    "relay" => "gateway",
     "deadline_ms" => 1,
     "limit" => 1,
     "timeout_ms" => 1,
@@ -28,7 +28,7 @@ defmodule FlezhaHttp.StatusTest do
         {"http.busy", 503},
         {"http.streams_full", 503},
         {"http.answer_invalid", 502},
-        {"operator.not_found", 404}
+        {"relay.not_found", 404}
       ] do
     test "#{code} is #{status}" do
       error = Error.new(unquote(code), @details)

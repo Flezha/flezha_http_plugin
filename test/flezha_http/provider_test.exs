@@ -5,7 +5,7 @@ defmodule FlezhaHttp.ProviderTest do
   alias Flezha.Plugin.ProviderBehaviour.Options
   alias FlezhaHttp.Provider
 
-  @host %{source_namespace: "default", source_operator_id: "gateway", source_plugin_id: "web"}
+  @host %{source_namespace: "default", source_relay_id: "gateway", source_plugin_id: "web"}
 
   defp prepare(opts) do
     with {:ok, opts} <- Options.normalise_opts(Provider, opts) do
@@ -58,26 +58,26 @@ defmodule FlezhaHttp.ProviderTest do
   end
 
   test "a member of a partition group is refused, naming it" do
-    assert {:error, {:partitioned_host, %{provider: "http_server", operator: "pinger#p0"}}} =
+    assert {:error, {:partitioned_host, %{provider: "http_server", relay: "pinger#p0"}}} =
              Options.normalise_opts(Provider, %{port: 18_080, channel: "http"})
              |> then(fn {:ok, opts} ->
                Provider.init_provider(
                  Map.merge(opts, %{
                    @host
-                   | source_operator_id: "pinger#p0"
+                   | source_relay_id: "pinger#p0"
                  })
                  |> Map.merge(%{partition_index: 0, partition_count: 2})
                )
              end)
 
-    assert %Flezha.Error{code: "plugin.partitioned_host", details: %{"operator" => "pinger#p0"}} =
+    assert %Flezha.Error{code: "plugin.partitioned_host", details: %{"relay" => "pinger#p0"}} =
              Flezha.Error.from_reason(
-               {:partitioned_host, %{provider: "http_server", operator: "pinger#p0"}},
+               {:partitioned_host, %{provider: "http_server", relay: "pinger#p0"}},
                nil
              )
   end
 
-  test "one worker per operator and plugin, keyed by namespace, operator and plugin" do
+  test "one worker per relay and plugin, keyed by namespace, relay and plugin" do
     {:ok, opts} = prepare(%{port: 18_080, channel: "http"})
     assert [{{"default", "gateway", "web"}, ^opts}] = Provider.worker_specs(opts)
   end

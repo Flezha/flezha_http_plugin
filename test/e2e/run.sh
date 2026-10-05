@@ -43,8 +43,8 @@ setup() {
 
   local web='[{"name":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","channel":"http","pass_headers":"x-api-key","heartbeat_ms":"1000","deadline_ms":"2000","stream_wait_ms":"3000","max_body_bytes":"4096"}}]'
   local ping='[{"name":"ping","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18081","channel":"http"}}]'
-  start_operator gateway gateway --plugins "$web"
-  start_operator pinger pinger --plugins "$ping"
+  start_relay gateway gateway --plugins "$web"
+  start_relay pinger pinger --plugins "$ping"
   until_ok 30 "curl -s -o /dev/null $GW/nothing-here" || { say "nothing listens on 18080"; exit 1; }
 }
 
@@ -103,7 +103,7 @@ check_d() {
   local session status
   session=$(open_session dora)
   status=$(http d -X POST "$GW/sessions/$session/messages?user=dora" -d '{"text":"hi"}')
-  flz operator listen gateway --input --json --duration-ms 4000 >"$TMP/out/d.listen" 2>&1 &
+  flz relay listen gateway --input --json --duration-ms 4000 >"$TMP/out/d.listen" 2>&1 &
   local listener=$!
   until_ok 5 "[ \$(listeners gateway) -ge 1 ]"
   message dora "$session" "hi" -H 'authorization: Bearer secret-token' >/dev/null
@@ -185,13 +185,13 @@ check_i() {
 check_j() {
   local one two
   one=$(curl -s -o "$TMP/out/j1.body" -w '%{http_code} %{time_total}' "$GW/raw/ghost/events")
-  until_ok 30 "flz operator start echo --id ghost-2 --namespace other || flz operator info ghost-2 --namespace other"
+  until_ok 30 "flz relay start echo --id ghost-2 --namespace other || flz relay info ghost-2 --namespace other"
   two=$(curl -s -o "$TMP/out/j2.body" -w '%{http_code} %{time_total}' "$GW/raw/ghost-2/events")
   local ok=1
   for out in "$one" "$two"; do
     [ "${out% *}" = 404 ] && python3 -c "import sys; sys.exit(0 if 2.8 <= float('${out#* }') < 5 else 1)" || ok=0
   done
-  if [ $ok = 1 ] && grep -q '"operator.not_found"' "$TMP/out/j2.body"; then
+  if [ $ok = 1 ] && grep -q '"relay.not_found"' "$TMP/out/j2.body"; then
     pass j "ghost gives 404 after ${one#* } s, ghost-2 of namespace other after ${two#* } s"
   else
     fail j "ghost: $one, ghost-2: $two $(cat "$TMP/out/j2.body")"
@@ -201,8 +201,8 @@ check_j() {
 check_k() {
   local session
   session=$(open_session kim)
-  if ! until_ok 30 "operator_json $session | grep -q '\"phase\": \"suspended\"'"; then
-    fail k "$session never reported asleep: $(flz operator info "$session" --json 2>&1 | head -c 300)"
+  if ! until_ok 30 "relay_json $session | grep -q '\"phase\": \"suspended\"'"; then
+    fail k "$session never reported asleep: $(flz relay info "$session" --json 2>&1 | head -c 300)"
     return
   fi
   stream k "/sessions/$session/events?user=kim"
@@ -227,15 +227,15 @@ check_l() {
 
 check_m() {
   local spec='[{"name":"web_pg2","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18090","channel":"http"}}]'
-  start_operator pinger pg --partitions 2
-  flz plugin enable web2 http_server --operator_id=pg --hook=on_terminate --Xport=18089 --Xchannel=http \
+  start_relay pinger pg --partitions 2
+  flz plugin enable web2 http_server --relay_id=pg --hook=on_terminate --Xport=18089 --Xchannel=http \
     >"$TMP/out/m.enable" 2>&1
   local refused=$? rows
-  rows=$( (operator_json 'pg#p0'; operator_json 'pg#p1') | grep -c '"web2')
-  flz operator start pinger --id pg2 --partitions 2 --plugins "$spec" --json >"$TMP/out/m.start" 2>&1
+  rows=$( (relay_json 'pg#p0'; relay_json 'pg#p1') | grep -c '"web2')
+  flz relay start pinger --id pg2 --partitions 2 --plugins "$spec" --json >"$TMP/out/m.start" 2>&1
   local declined=$?
   if [ $refused != 0 ] && grep -q 'plugin.partitioned_host' "$TMP/out/m.enable" && [ "$rows" = 0 ] &&
-    [ $declined != 0 ] && grep -q 'partitioned_host' "$TMP/out/m.start" && [ "$(operator_json 'pg2#p0')" = "{}" ]; then
+    [ $declined != 0 ] && grep -q 'partitioned_host' "$TMP/out/m.start" && [ "$(relay_json 'pg2#p0')" = "{}" ]; then
     pass m "enable on a group is refused with plugin.partitioned_host and leaves no row; a group declaring it does not start"
   else
     fail m "enable exit $refused: $(cat "$TMP/out/m.enable"); rows $rows; start exit $declined: $(cat "$TMP/out/m.start")"
@@ -243,7 +243,7 @@ check_m() {
 }
 
 check_n() {
-  flz plugin enable web3 http_server --operator_id=pinger --hook=on_terminate --Xport=18080 --Xchannel=http \
+  flz plugin enable web3 http_server --relay_id=pinger --hook=on_terminate --Xport=18080 --Xchannel=http \
     >"$TMP/out/n.enable" 2>&1
   local refused=$?
   flz plugin disable web3 >/dev/null 2>&1
@@ -256,10 +256,10 @@ check_n() {
 }
 
 check_o() {
-  flz operator info gateway >"$TMP/out/o.info" 2>&1
+  flz relay info gateway >"$TMP/out/o.info" 2>&1
   if grep -q '127.0.0.1:18080' "$TMP/out/o.info" && grep -q 'waiting' "$TMP/out/o.info" &&
     grep -q 'streams' "$TMP/out/o.info" && grep -q 'refused' "$TMP/out/o.info"; then
-    pass o "flz operator info gateway shows the address and the counters"
+    pass o "flz relay info gateway shows the address and the counters"
   else
     fail o "$(cat "$TMP/out/o.info")"
   fi
@@ -270,7 +270,7 @@ check_p() {
   session=$(open_session pia)
   stream p "/sessions/$session/events?user=pia"
   stream_open p
-  flz operator stop "$session" >"$TMP/out/p.stop" 2>&1
+  flz relay stop "$session" >"$TMP/out/p.stop" 2>&1
   if until_ok 30 "[ \$(events p ended) -ge 1 ]"; then
     pass p "stopping a streamed session gives an ended event"
   else
@@ -281,7 +281,7 @@ check_p() {
 check_r() {
   local killed
   killed=$(cd "$FLEZHA_CTL_DIR" && flzvm rpc '
-    {:ok, pid} = Flezha.Service.OperatorManager.get_operator_pid("default", "gateway")
+    {:ok, pid} = Flezha.Service.RelayManager.get_relay_pid("default", "gateway")
     Process.exit(pid, :kill)
     IO.puts(inspect(pid))' 2>&1)
   if until_ok 30 "[ \"\$(curl -s -o /dev/null -w '%{http_code}' $GW/no-route -m 1)\" = 404 ]"; then
@@ -292,12 +292,12 @@ check_r() {
 }
 
 check_s() {
-  start_operator echo echo
+  start_relay echo echo
   stream s "/raw/echo/events"
   stream_open s
-  flz operator send echo --text hi >/dev/null 2>&1
+  flz relay send echo --text hi >/dev/null 2>&1
   if until_ok 10 "[ \$(events s output) -ge 1 ]" && [ "$(payloads s output)" = hi ]; then
-    pass s "a flow operator's output reaches the stream"
+    pass s "a flow relay's output reaches the stream"
   else
     fail s "events: $(tr '\n' ' ' <"$TMP/out/s.events")"
   fi
@@ -314,7 +314,7 @@ check_q() {
 
 # 20 sequential stream opens, from the request to the response headers.
 timing() {
-  start_operator echo timed
+  start_relay echo timed
   for _ in $(seq 20); do
     curl -s -o /dev/null -m 0.5 -w '%{time_starttransfer}\n' "$GW/raw/timed/events"
   done | python3 -c '

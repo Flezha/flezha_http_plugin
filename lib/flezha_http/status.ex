@@ -24,7 +24,7 @@ defmodule FlezhaHttp.Status do
     "http.busy" => 503,
     "http.streams_full" => 503,
     "http.answer_invalid" => 502,
-    "operator.not_found" => 404
+    "relay.not_found" => 404
   }
 
   @classes %{
@@ -45,14 +45,14 @@ defmodule FlezhaHttp.Status do
     do: Map.get(@codes, code) || Map.fetch!(@classes, class)
 
   # The details a client may read of an error the plugin did not build: the ones
-  # naming the operator, the channel and the call's bounds, never the author's
+  # naming the relay, the channel and the call's bounds, never the author's
   # text, an entry or a reason.
-  @public_details ~w(operator namespace channel attempts deadline_ms pending_max status bytes frames)
+  @public_details ~w(relay namespace channel attempts deadline_ms pending_max status bytes frames)
 
   @doc """
   What a client may read of an error the controller answered: its code, its class,
   its catalogue message filled only from the public details, and no hint. The
-  full error stays with the controller (`flz operator listen`, `flz dlq`, its log).
+  full error stays with the controller (`flz relay listen`, `flz dlq`, its log).
   """
   @spec public(Error.t()) :: Error.t()
   def public(%Error{code: code, details: details} = error) do

@@ -80,7 +80,7 @@ defmodule FlezhaHttp.EventsTest do
   test "each event has its name and data, and nothing else of the metadata leaves" do
     notice =
       Error.new("input.dead_lettered",
-        operator: "anna-42",
+        relay: "anna-42",
         channel: "turn",
         entry: "dlq-7",
         tasklet: "Chat.Agent.Turn",
@@ -96,7 +96,7 @@ defmodule FlezhaHttp.EventsTest do
       :idle
     ]
 
-    conn = stream(%{stream: "anna-42"}, listener(events, {:ok, :operator_ended}))
+    conn = stream(%{stream: "anna-42"}, listener(events, {:ok, :relay_ended}))
 
     assert [
              :comment,
@@ -112,24 +112,24 @@ defmodule FlezhaHttp.EventsTest do
     assert map_size(part) == 4
     assert map_size(output) == 2
     assert %{"code" => "input.dead_lettered", "hint" => nil} = dead
-    assert dead["details"] == %{"operator" => "anna-42", "channel" => "turn", "attempts" => 1}
+    assert dead["details"] == %{"relay" => "anna-42", "channel" => "turn", "attempts" => 1}
 
     assert dead["message"] ==
-             "an input of operator 'anna-42' on channel 'turn' was dead-lettered after 1 attempt(s)"
+             "an input of relay 'anna-42' on channel 'turn' was dead-lettered after 1 attempt(s)"
 
     refute conn.resp_body =~ "sk-123"
     refute conn.resp_body =~ "dlq-7"
   end
 
   test "a listener ended with an error is told as closed, carrying the error" do
-    overrun = Error.new("listener.overrun", operator: "anna-42", bytes: 1, frames: 1)
+    overrun = Error.new("listener.overrun", relay: "anna-42", bytes: 1, frames: 1)
     conn = stream(%{stream: "anna-42"}, listener([], {:error, overrun}))
 
     assert [:comment, {"closed", %{"error" => %{"code" => "listener.overrun"}}}] = events(conn)
   end
 
   test "a refused attach writes nothing and answers the error's status" do
-    refused = Error.new("listener.detached", operator: "anna-42")
+    refused = Error.new("listener.detached", relay: "anna-42")
     conn = stream(%{stream: "anna-42"}, fn _, _, _, _ -> {:error, refused} end)
 
     assert conn.status == 409
@@ -140,7 +140,7 @@ defmodule FlezhaHttp.EventsTest do
   describe "a target that does not exist yet" do
     setup do
       test = self()
-      not_found = Error.new("operator.not_found", namespace: "default", operator: "ghost")
+      not_found = Error.new("relay.not_found", namespace: "default", relay: "ghost")
 
       %{
         not_found: not_found,
@@ -157,7 +157,7 @@ defmodule FlezhaHttp.EventsTest do
       waited = System.monotonic_time(:millisecond) - started
 
       assert conn.status == 404
-      assert Jason.decode!(conn.resp_body)["error"]["code"] == "operator.not_found"
+      assert Jason.decode!(conn.resp_body)["error"]["code"] == "relay.not_found"
       assert waited >= 1_000
       assert length(drain(:attempt)) >= 2
     end

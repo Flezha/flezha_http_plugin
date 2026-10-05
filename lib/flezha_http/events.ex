@@ -1,7 +1,7 @@
 defmodule FlezhaHttp.Events do
   @moduledoc """
   A stream answer: the request process attaches a listener
-  (`Flezha.Service.Listener.listen/4`) to the operator the answer names, always
+  (`Flezha.Service.Listener.listen/4`) to the relay the answer names, always
   in the host's own namespace, and writes each event as a server-sent event on
   the same connection.
 
@@ -38,7 +38,7 @@ defmodule FlezhaHttp.Events do
     if result == :full do
       Status.send_error(
         conn,
-        Error.new("http.streams_full", operator: config.operator, max_streams: config.max_streams)
+        Error.new("http.streams_full", relay: config.relay, max_streams: config.max_streams)
       )
     else
       result
@@ -51,7 +51,7 @@ defmodule FlezhaHttp.Events do
     conn = Process.get(@conn_key)
 
     case {outcome, conn.state} do
-      {{:error, %Error{code: "operator.not_found"}}, :unset} ->
+      {{:error, %Error{code: "relay.not_found"}}, :unset} ->
         case until - now() do
           left when left > 0 ->
             Process.sleep(min(left, @retry_ms))
@@ -67,7 +67,7 @@ defmodule FlezhaHttp.Events do
       {{:error, %Error{} = error}, _open} ->
         finish("closed", Error.render(Status.public(error), :json))
 
-      {{:ok, :operator_ended}, _open} ->
+      {{:ok, :relay_ended}, _open} ->
         finish("ended", "{}")
 
       {{:ok, _done}, _open} ->
