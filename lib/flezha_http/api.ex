@@ -10,6 +10,9 @@ defmodule FlezhaHttp.Api do
     catalogue's own form.
   - `POST /v1/call/<Name>`: one operation with a JSON array of arguments,
     answered with its JSON or its error object.
+  - `POST /v1/relays/<id>/<channel>`: a relay's channel called with the body
+    as its payload (`Relay.call_channel`), answered in the answer's format, or
+    `202` for a channel that does not answer.
 
   A request is judged in this order: its `Origin`, its token, its route, a
   waiting slot, its body, then the call within `deadline_ms`. It logs the
@@ -116,6 +119,12 @@ defmodule FlezhaHttp.Api do
       {_method, ["v1", "call", _name]} ->
         not_allowed(conn, "POST")
 
+      {"POST", ["v1", "relays", relay, channel]} ->
+        held(conn, config, &call_relay(&1, relay, channel, &2, context, config))
+
+      {_method, ["v1", "relays", _relay, _channel]} ->
+        not_allowed(conn, "POST")
+
       _unknown ->
         Plug.Conn.send_resp(conn, 404, "")
     end
@@ -143,7 +152,8 @@ defmodule FlezhaHttp.Api do
            body,
            headers,
            fn -> Admin.catalogue(context) end,
-           door(context, config)
+           door(context, config),
+           namespace(context)
          ) do
       {status, nil, _tool} -> Plug.Conn.send_resp(conn, status, "")
       {status, answer, nil} -> send_json(conn, status, Jason.encode!(answer))
@@ -171,6 +181,39 @@ defmodule FlezhaHttp.Api do
       {:error, error} -> Status.send_error(conn, error)
     end
   end
+
+  # A relay's channel, called with the body as its payload; the answer is
+  # sent in its own format.
+  defp call_relay(conn, relay, channel, body, context, config) do
+    args = [namespace(context), relay, channel, Base.encode64(body), %{"payload" => "base64"}]
+
+    case door(context, config).("Relay.call_channel", args) do
+      {:ok, json} -> conn |> named("Relay.call_channel") |> send_answer(Jason.decode!(json))
+      {:error, error} -> Status.send_error(conn, error)
+    end
+  end
+
+  defp send_answer(conn, %{"accepted" => true}),
+    do: send_json(conn, 202, ~s({"accepted":true}))
+
+  defp send_answer(conn, %{"answer_codec" => "json", "answer" => answer}),
+    do: send_json(conn, 200, Jason.encode!(answer))
+
+  defp send_answer(conn, %{"answer_codec" => "text", "answer" => answer}) do
+    conn
+    |> Plug.Conn.put_resp_content_type("text/plain")
+    |> Plug.Conn.send_resp(200, answer)
+  end
+
+  defp send_answer(conn, %{"answer" => answer}) do
+    conn
+    |> Plug.Conn.put_resp_content_type("application/octet-stream", nil)
+    |> Plug.Conn.send_resp(200, Base.decode64!(answer))
+  end
+
+  # The namespace the token is bound to; a caller bound to none acts in the
+  # default one.
+  defp namespace(context), do: Map.get(context, :namespace) || ""
 
   # The door, answered within the deadline. A call past it is answered
   # `control.timeout` and left to finish, holding its waiting slot until it does:

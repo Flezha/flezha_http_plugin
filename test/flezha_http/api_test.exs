@@ -211,6 +211,118 @@ defmodule FlezhaHttp.ApiTest do
     end
   end
 
+  describe "a relay's channel" do
+    @app %{@viewer | role: :app}
+
+    defp relay_call(channel, body, answer, headers \\ []) do
+      config = config(context: @app, answer: fn "Relay.call_channel", _args -> answer end)
+      request(:post, "/v1/relays/orders-eu/" <> channel, body, headers, config)
+    end
+
+    test "a JSON call answers 200 with the relay's JSON answer" do
+      body = ~s({"pair":"EUR/USD","amount":1000})
+
+      conn =
+        relay_call("place", body, {:ok, ~s({"answer":{"status":"placed"},"answer_codec":"json"})})
+
+      assert conn.status == 200
+      assert ["application/json"] = Plug.Conn.get_resp_header(conn, "content-type")
+      assert json(conn) == %{"status" => "placed"}
+
+      assert_received {:door, "Relay.call_channel",
+                       ["default", "orders-eu", "place", encoded, %{"payload" => "base64"}], @app}
+
+      assert Base.decode64!(encoded) == body
+    end
+
+    test "a channel that does not answer is a 202" do
+      conn = relay_call("audit", "checked", {:ok, ~s({"accepted":true})})
+
+      assert conn.status == 202
+      assert json(conn) == %{"accepted" => true}
+      assert_received {:door, "Relay.call_channel", [_, _, "audit", encoded, _], _}
+      assert Base.decode64!(encoded) == "checked"
+    end
+
+    test "a text answer is text, and bytes travel as they are both ways" do
+      conn = relay_call("note", "hi", {:ok, ~s({"answer":"ok","answer_codec":"text"})})
+      assert conn.status == 200
+      assert ["text/plain; charset=utf-8"] = Plug.Conn.get_resp_header(conn, "content-type")
+      assert conn.resp_body == "ok"
+
+      conn = relay_call("blob", <<1, 2, 3>>, {:ok, ~s({"answer":"/wA=","answer_codec":"bytes"})})
+      assert ["application/octet-stream"] = Plug.Conn.get_resp_header(conn, "content-type")
+      assert conn.resp_body == <<255, 0>>
+      assert_received {:door, "Relay.call_channel", [_, _, "note", _, _], _}
+      assert_received {:door, "Relay.call_channel", [_, _, "blob", encoded, _], _}
+      assert Base.decode64!(encoded) == <<1, 2, 3>>
+    end
+
+    test "a wrong channel answers api.channel_unknown with its class's status" do
+      unknown =
+        Error.new("api.channel_unknown",
+          relay: "orders-eu",
+          channel: "plce",
+          channels: "place, audit"
+        )
+
+      conn = relay_call("plce", "{}", {:error, unknown})
+
+      assert conn.status == 404
+      assert json(conn)["error"]["code"] == "api.channel_unknown"
+    end
+
+    # The door judges the token's own context, as `Relay.call_channel` under a
+    # viewer is refused in `Flezha.Service.RelayCallTest`; the route answers
+    # that refusal with its class's status.
+    test "a viewer's call carries the viewer's context and its refusal is a 403" do
+      denied = Error.new("authz.role_insufficient")
+      config = config(answer: fn "Relay.call_channel", _args -> {:error, denied} end)
+      conn = request(:post, "/v1/relays/orders-eu/place", ~s({"pair":"EUR/USD"}), [], config)
+
+      assert conn.status == 403
+      assert json(conn)["error"]["code"] == "authz.role_insufficient"
+      assert_received {:door, "Relay.call_channel", _args, @viewer}
+    end
+
+    test "only POST reaches it" do
+      conn = request(:get, "/v1/relays/orders-eu/place")
+      assert conn.status == 405
+      assert Plug.Conn.get_resp_header(conn, "allow") == ["POST"]
+    end
+
+    test "an app token's tools/list holds its namespace's relay tools beside the catalogue's" do
+      api = [
+        %{
+          "factory" => "orders",
+          "description" => nil,
+          "channels" => [
+            %{
+              "channel" => "place",
+              "codec" => "json",
+              "schema" => nil,
+              "description" => "Places an order",
+              "answer_codec" => "json",
+              "answer_schema" => nil,
+              "tool" => "orders_place",
+              "tool_taken" => false
+            }
+          ]
+        }
+      ]
+
+      answer = fn "Relay.api", ["default"] -> {:ok, Jason.encode!(api)} end
+      listed = json(mcp("tools/list", %{}, config: config(context: @app, answer: answer)))
+      names = for tool <- listed["result"]["tools"], do: tool["name"]
+      viewer = for tool <- json(mcp("tools/list"))["result"]["tools"], do: tool["name"]
+
+      assert "relay_list" in names
+      assert "flezha_guide" in names
+      assert List.last(names) == "orders_place"
+      refute "orders_place" in viewer
+    end
+  end
+
   describe "the plain JSON form" do
     test "a call is the door's, with the token's context and the array as written" do
       answer = fn "Relay.list", _ -> {:ok, ~s([{"id":"echo"}])} end
