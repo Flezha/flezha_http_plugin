@@ -474,7 +474,9 @@ defmodule FlezhaHttp.ApiTest do
 
     test "the knowledge tools are listed for every role and answer without the door" do
       listed = for tool <- json(mcp("tools/list"))["result"]["tools"], do: tool["name"]
-      assert Enum.take(listed, 4) == ~w(flezha_guide flezha_sdk_example flezha_error flezha_docs)
+
+      assert Enum.take(listed, 5) ==
+               ~w(flezha_guide flezha_sdk_example flezha_error flezha_docs flezha_new_project)
 
       conn =
         mcp("tools/call", %{"name" => "flezha_error", "arguments" => %{"code" => "dlq.not_found"}})
