@@ -153,9 +153,10 @@ for line in open(sys.argv[1]):
 PY
 }
 
-# The entry of one relay in `flz relay info --json`, as JSON.
+# The entry of one relay in `flz relay info --json`, as JSON; `{}` for a relay
+# that is not running. Named, `relay info` shows the relay's API instead.
 relay_json() {
-  flz relay info "$1" --json 2>/dev/null | python3 -c '
+  flz relay info --json 2>/dev/null | python3 -c '
 import json, sys
 def walk(node):
     if isinstance(node, dict):
@@ -166,7 +167,7 @@ def walk(node):
     elif isinstance(node, list):
         for value in node:
             yield from walk(value)
-print(json.dumps(next(walk(json.load(sys.stdin)), {})))' "$1"
+print(json.dumps(next(walk(json.loads(sys.stdin.read() or "{}")), {})))' "$1"
 }
 
 listeners() { relay_json "$1" | grep -o '"io_listener_' | wc -l; }

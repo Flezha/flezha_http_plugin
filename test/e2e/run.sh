@@ -225,6 +225,26 @@ check_l() {
   fi
 }
 
+# A calls listener on the pinger sees the plugin's call and its answer, paired.
+check_t() {
+  flz relay listen pinger --calls --json --duration-ms 5000 >"$TMP/out/t.listen" 2>&1 &
+  local listener=$! status
+  until_ok 5 "[ \$(listeners pinger) -ge 1 ]"
+  status=$(http t "http://127.0.0.1:18081/ping")
+  wait $listener
+  if [ "$status" = 200 ] && python3 - "$TMP/out/t.listen" <<'PY'; then
+import json, sys
+events = [json.loads(line) for line in open(sys.argv[1]) if line.startswith("{")]
+calls = {e["call"] for e in events if e["kind"] == "call" and e["metadata"].get("flz.call_source") == "plugin"}
+answered = {e["call"] for e in events if e["kind"] == "answered" and json.loads(e["payload"]).get("body") == "pong"}
+sys.exit(0 if calls & answered else 1)
+PY
+    pass t "a calls listener holds the plugin's call and its pong answer under one call id"
+  else
+    fail t "GET /ping gave $status; listen output: $(head -c 600 "$TMP/out/t.listen")"
+  fi
+}
+
 check_m() {
   local spec='[{"name":"web_pg2","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18090","channel":"http"}}]'
   start_relay pinger pg --partitions 2
@@ -326,7 +346,7 @@ print(f"TIMING stream open: n={len(t)} mean={sum(t)/len(t):.1f} ms max={max(t):.
 # Sourced (by run_docker.sh), it only defines the checks.
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 
-CHECKS=${*:-a b c d e f g h i j k l m n o p r s q}
+CHECKS=${*:-a b c d e f g h i j k l t m n o p r s q}
 controller_env "$TMP" "flzhttp$$" "$REL"
 trap stop_all EXIT
 setup

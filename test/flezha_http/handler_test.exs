@@ -37,7 +37,7 @@ defmodule FlezhaHttp.HandlerTest do
                "body" => ~s({"text":"hi"})
              }
 
-      assert metadata == %{"channel" => "http"}
+      assert metadata == %{"channel" => "http", "flz.call_source" => "plugin"}
       refute payload =~ "Bearer t"
     end
 
@@ -52,7 +52,12 @@ defmodule FlezhaHttp.HandlerTest do
     test "naming the answer channel the plugin was given" do
       serve(conn(:get, "/"), &echo/1, answer_channel: "answers")
       assert_received {:called, _payload, metadata, _deadline}
-      assert metadata == %{"channel" => "http", "flz.call_answer_channel" => "answers"}
+
+      assert metadata == %{
+               "channel" => "http",
+               "flz.call_answer_channel" => "answers",
+               "flz.call_source" => "plugin"
+             }
     end
 
     test "whose metadata a client cannot reach" do
@@ -61,7 +66,7 @@ defmodule FlezhaHttp.HandlerTest do
       |> serve(&echo/1, pass_headers: ["flz.reply_to"])
 
       assert_received {:called, payload, metadata, _deadline}
-      assert metadata == %{"channel" => "http"}
+      assert metadata == %{"channel" => "http", "flz.call_source" => "plugin"}
 
       assert %{"query" => "flz.msg_id=y", "headers" => %{"flz.reply_to" => "x"}} =
                Jason.decode!(payload)
