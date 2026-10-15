@@ -235,6 +235,29 @@ defmodule FlezhaHttp.ApiTest do
       assert Base.decode64!(encoded) == body
     end
 
+    test "a partition group's key rides as the call's key; no key is no key" do
+      answer = {:ok, ~s({"answer":"ok","answer_codec":"text"})}
+
+      conn = relay_call("in?key=EURUSD", "x", answer)
+      assert conn.status == 200
+
+      assert_received {:door, "Relay.call_channel",
+                       [
+                         "default",
+                         "orders-eu",
+                         "in",
+                         _,
+                         %{"payload" => "base64", "key" => "EURUSD"}
+                       ], @app}
+
+      relay_call("in", "x", answer)
+
+      assert_received {:door, "Relay.call_channel",
+                       ["default", "orders-eu", "in", _, %{"payload" => "base64"} = opts], @app}
+
+      refute Map.has_key?(opts, "key")
+    end
+
     test "a channel that does not answer is a 202" do
       conn = relay_call("audit", "checked", {:ok, ~s({"accepted":true})})
 

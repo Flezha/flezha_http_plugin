@@ -10,9 +10,10 @@ defmodule FlezhaHttp.Api do
     catalogue's own form.
   - `POST /v1/call/<Name>`: one operation with a JSON array of arguments,
     answered with its JSON or its error object.
-  - `POST /v1/relays/<id>/<channel>`: a relay's channel called with the body
-    as its payload (`Relay.call_channel`), answered in the answer's format, or
-    `202` for a channel that does not answer.
+  - `POST /v1/relays/<id>/<channel>[?key=<key>]`: a relay's channel called
+    with the body as its payload (`Relay.call_channel`), a partition group's
+    member chosen by `key`, answered in the answer's format, or `202` for a
+    channel that does not answer.
 
   A request is judged in this order: its `Origin`, its token, its route, a
   waiting slot, its body, then the call within `deadline_ms`. It logs the
@@ -182,10 +183,12 @@ defmodule FlezhaHttp.Api do
     end
   end
 
-  # A relay's channel, called with the body as its payload; the answer is
-  # sent in its own format.
+  # A relay's channel, called with the body as its payload and `?key=` as the
+  # key whose partition answers; the answer is sent in its own format.
   defp call_relay(conn, relay, channel, body, context, config) do
-    args = [namespace(context), relay, channel, Base.encode64(body), %{"payload" => "base64"}]
+    key = Plug.Conn.fetch_query_params(conn).query_params["key"]
+    opts = Map.put(if(is_binary(key), do: %{"key" => key}, else: %{}), "payload", "base64")
+    args = [namespace(context), relay, channel, Base.encode64(body), opts]
 
     case door(context, config).("Relay.call_channel", args) do
       {:ok, json} -> conn |> named("Relay.call_channel") |> send_answer(Jason.decode!(json))
