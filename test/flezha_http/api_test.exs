@@ -682,7 +682,10 @@ defmodule FlezhaHttp.ApiTest do
 
       assert json(mcp)["result"]["structuredContent"]["error"] == public
       refute Enum.any?([call, relay, mcp], &(&1.resp_body =~ "noproc"))
-      assert log =~ "Relay.list_namespaces failed for a http caller: an unexpected failure: exit:"
+
+      assert log =~
+               "Relay.list_namespaces failed for a http caller: internal.uncatalogued"
+
       assert log =~ "{:noproc, {GenServer, :call, [Flezha.Service.HubManager"
     end
   end
