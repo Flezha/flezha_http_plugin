@@ -639,6 +639,54 @@ defmodule FlezhaHttp.ApiTest do
     end
   end
 
+  describe "an operation that fails unexpectedly" do
+    # No controller runs here, so `Relay.list_namespaces` exits on the hub
+    # manager it calls. A relay's channel answers cleanly with no relay, so its
+    # route reaches that operation through the door in its place.
+    # Fails when: a network caller is answered the failure's own text, or the
+    # controller's log loses it.
+    test "every route answers its code alone, and the log names the cause" do
+      # Loaded as a release loads it: a name is resolved to existing atoms only.
+      Code.ensure_loaded!(Flezha.Service.Relay)
+      real = config(admin: &Flezha.Service.Admin.call/4)
+
+      raising =
+        config(
+          admin: fn _name, _args, caller, placement ->
+            Flezha.Service.Admin.call("Relay.list_namespaces", "[]", caller, placement)
+          end
+        )
+
+      log =
+        capture_log(fn ->
+          call = request(:post, "/v1/call/Relay.list_namespaces", "[]", [], real)
+          relay = request(:post, "/v1/relays/orders-eu/place", "{}", [], raising)
+          tool = %{"name" => "relay_list_namespaces", "arguments" => %{}}
+          send(self(), {:answered, call, relay, mcp("tools/call", tool, config: real)})
+        end)
+
+      assert_received {:answered, call, relay, mcp}
+
+      public = %{
+        "code" => "internal.uncatalogued",
+        "class" => "internal",
+        "message" => "an unexpected failure: the controller's log names the cause",
+        "details" => %{"reason" => "the controller's log names the cause"},
+        "hint" => nil
+      }
+
+      for conn <- [call, relay] do
+        assert conn.status == 500
+        assert json(conn)["error"] == public
+      end
+
+      assert json(mcp)["result"]["structuredContent"]["error"] == public
+      refute Enum.any?([call, relay, mcp], &(&1.resp_body =~ "noproc"))
+      assert log =~ "Relay.list_namespaces failed for a http caller: an unexpected failure: exit:"
+      assert log =~ "{:noproc, {GenServer, :call, [Flezha.Service.HubManager"
+    end
+  end
+
   test "TLS: the server answers HTTPS with the two files it names" do
     dir = Path.join(System.tmp_dir!(), "flezha_api_tls_#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
