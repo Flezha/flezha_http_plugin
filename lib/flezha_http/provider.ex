@@ -39,8 +39,7 @@ defmodule FlezhaHttp.Provider do
       ],
       answer_channel: [
         type: :string,
-        doc:
-          "The relay's channel whose output answers a request; the first output when unset"
+        doc: "The relay's channel whose output answers a request; the first output when unset"
       ],
       deadline_ms: [
         type: :int,
