@@ -79,11 +79,14 @@ defmodule FlezhaHttp.Server do
       http_2_options: [enabled: false],
       # One acceptor holding at most `max_connections`, and a connection past it
       # closed at once: ThousandIsland's defaults (100 x 16 384) bound nothing.
+      # Each read of a request head, and an idle keep-alive, waits the body
+      # timeout instead of ThousandIsland's 60 s.
       thousand_island_options: [
         shutdown_timeout: 1_000,
         num_acceptors: 1,
         num_connections: opts.max_connections,
-        max_connections_retry_count: 0
+        max_connections_retry_count: 0,
+        read_timeout: config.body_timeout_ms
       ]
     ]
 

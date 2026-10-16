@@ -194,6 +194,20 @@ defmodule FlezhaHttp.ServerTest do
     :gen_tcp.close(first)
   end
 
+  test "a client that stops sending its request head is answered 408 and frees its slot", ctx do
+    start(ctx, max_connections: 1, body_timeout_ms: 300)
+    {:ok, slow} = :gen_tcp.connect({127, 0, 0, 1}, ctx.port, [:binary, active: false])
+    :ok = :gen_tcp.send(slow, "GET /ping HTTP/1.1\r\n")
+
+    # Bandit logs the error before it sends the 408.
+    log =
+      capture_log(fn -> assert {:ok, "HTTP/1.0 408 " <> _} = :gen_tcp.recv(slow, 0, 2_000) end)
+
+    assert log =~ "Read timeout"
+    assert {:error, :closed} = :gen_tcp.recv(slow, 0, 2_000)
+    assert {200, _, "pong"} = Client.request(ctx.port, "GET", "/ping")
+  end
+
   describe "a stream on the wire" do
     setup ctx do
       test = self()
