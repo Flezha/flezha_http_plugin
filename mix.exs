@@ -34,7 +34,7 @@ defmodule FlezhaHttp.MixProject do
   # The core's shared test helpers it uses: a dependency compiles its `lib`
   # alone, and Mix takes a source outside the project only by absolute path.
   defp elixirc_paths(:test) do
-    core_helpers = ~w(message_test_helper)
+    core_helpers = ~w(message_test_helper source_walk)
 
     [
       "lib",
