@@ -31,7 +31,18 @@ defmodule FlezhaHttp.MixProject do
     ]
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  # The core's shared test helpers it uses: a dependency compiles its `lib`
+  # alone, and Mix takes a source outside the project only by absolute path.
+  defp elixirc_paths(:test) do
+    core_helpers = ~w(message_test_helper)
+
+    [
+      "lib",
+      "test/support"
+      | Enum.map(core_helpers, &Path.expand("../../test/helpers/#{&1}.ex", __DIR__))
+    ]
+  end
+
   defp elixirc_paths(_env), do: ["lib"]
 
   defp deps do

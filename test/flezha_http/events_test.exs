@@ -1,6 +1,7 @@
 defmodule FlezhaHttp.EventsTest do
   use ExUnit.Case, async: true
 
+  import FlezhaTest.Helper.MessageTestHelper, only: [collect: 1]
   import Plug.Test
 
   alias Flezha.Error
@@ -159,14 +160,14 @@ defmodule FlezhaHttp.EventsTest do
       assert conn.status == 404
       assert Jason.decode!(conn.resp_body)["error"]["code"] == "relay.not_found"
       assert waited >= 1_000
-      assert length(drain(:attempt)) >= 2
+      assert length(collect(do: (:attempt -> :attempt))) >= 2
     end
 
     test "is answered 404 at once with a wait of 0", ctx do
       conn = stream(%{stream: "ghost"}, ctx.absent, stream_wait_ms: 0)
 
       assert conn.status == 404
-      assert length(drain(:attempt)) == 1
+      assert length(collect(do: (:attempt -> :attempt))) == 1
     end
 
     test "streams once it exists", ctx do
@@ -202,13 +203,5 @@ defmodule FlezhaHttp.EventsTest do
     refute_received {:listen, _, _, _}
     assert :atomics.get(config.counters, 2) == 1
     assert :atomics.get(config.counters, 3) == 1
-  end
-
-  defp drain(message) do
-    receive do
-      ^message -> [message | drain(message)]
-    after
-      0 -> []
-    end
   end
 end

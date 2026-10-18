@@ -3,6 +3,7 @@ defmodule FlezhaHttp.HandlerTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
+  import FlezhaTest.Helper.MessageTestHelper, only: [collect: 1]
   import Plug.Test
 
   alias Flezha.Error
@@ -142,17 +143,11 @@ defmodule FlezhaHttp.HandlerTest do
       assert Task.await(task).status == 200
     end
 
-    assert [{:called, _, _, _}, {:called, _, _, _}] = drain_calls()
+    assert [{:called, _, _, _}, {:called, _, _, _}] =
+             collect(do: ({:called, _, _, _} = call -> call))
+
     assert :atomics.get(config.counters, 1) == 0
     assert :atomics.get(config.counters, 3) == 1
-  end
-
-  defp drain_calls() do
-    receive do
-      {:called, _, _, _} = call -> [call | drain_calls()]
-    after
-      0 -> []
-    end
   end
 
   describe "a plain answer envelope becomes the response" do
