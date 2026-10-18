@@ -6,10 +6,10 @@ and Plug.
 - `http_server` puts a relay behind an HTTP/1.1 port. Every request becomes one outside
   call of the relay, the first output the call causes becomes the HTTP response, and a
   stream answer turns the connection into server-sent events of another relay's parts
-  and outputs. Its contract is the core's page `docs/plugins/http_server.md`.
+  and outputs. Its contract is the core's page `docs/public/plugins/http_server.md`.
 - `http_api` serves the controller's published operations to a bearer token's principal,
   as MCP tools at `POST /mcp` and as plain JSON under `/v1`. It is a controller plugin,
-  enabled in `_system`. Its contract is the core's page `docs/plugins/http_api.md`.
+  enabled in `_system`. Its contract is the core's page `docs/public/plugins/http_api.md`.
 
 This README covers the repository.
 
@@ -46,7 +46,7 @@ RUSTLER_SKIP_COMPILATION=true mix format --check-formatted
 never loads it. `mix test` runs with `--no-start`, so no controller boots; the tests start
 Bandit alone and stand in for the relay. The catalogue test fails when a code the plugin
 uses is missing from the core's `flz_transport/errors.json`, and the docs test when the
-option table of `docs/plugins/http_server.md` or `docs/plugins/http_api.md` differs from
+option table of `docs/public/plugins/http_server.md` or `docs/public/plugins/http_api.md` differs from
 its provider's declaration, printing the table to put there.
 
 ## Packaging
@@ -76,7 +76,7 @@ flz controller stop && flz controller start
 flz plugin list --installed
 ```
 
-Then enable `http_server` on a relay as `docs/plugins/http_server.md` shows.
+Then enable `http_server` on a relay as `docs/public/plugins/http_server.md` shows.
 
 ## The end-to-end run
 

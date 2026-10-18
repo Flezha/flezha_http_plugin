@@ -6,7 +6,7 @@ defmodule FlezhaHttp.Provider do
   response, or a stream of another relay's events (`FlezhaHttp.Events`).
 
   The contract, the envelopes and the option table are the core's
-  `docs/plugins/http_server.md`.
+  `docs/public/plugins/http_server.md`.
   """
 
   alias Flezha.Plugin.Extension.Ctx

@@ -6,7 +6,7 @@ defmodule FlezhaHttp.ApiProvider do
 
   A controller plugin enabled only in `_system`, with no hook: it runs one
   listener on every controller holding `_system`. The page is the core's
-  `docs/plugins/http_api.md`.
+  `docs/public/plugins/http_api.md`.
   """
 
   alias Flezha.Plugin.ProviderBehaviour

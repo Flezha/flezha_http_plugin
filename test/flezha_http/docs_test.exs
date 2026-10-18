@@ -3,7 +3,7 @@ defmodule FlezhaHttp.DocsTest do
 
   alias Flezha.Plugin.ProviderBehaviour.Options
 
-  @docs Path.join(Mix.Project.deps_paths()[:flezha], "docs/plugins")
+  @docs Path.join(Mix.Project.deps_paths()[:flezha], "docs/public/plugins")
 
   for {provider, page} <- [
         {FlezhaHttp.Provider, "http_server.md"},
