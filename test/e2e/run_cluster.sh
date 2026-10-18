@@ -66,7 +66,7 @@ until_ok 60 "on A flzvm rpc 'IO.puts(Enum.member?(Node.list(), :\"$NODE_B@127.0.
   { say "B did not join A"; exit 1; }
 
 say "the gateway on A"
-build_chat
+build_runner
 on A start_runner runner_a default
 web='[{"name":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","channel":"http","pass_headers":"x-api-key","heartbeat_ms":"1000"}}]'
 on A start_relay gateway gateway --plugins "$web"

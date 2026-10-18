@@ -37,7 +37,7 @@ setup() {
   flz namespace create other >/dev/null 2>&1
 
   say "building and starting the chat runners"
-  build_chat
+  build_runner
   start_runner runner default
   start_runner runner_other other
 

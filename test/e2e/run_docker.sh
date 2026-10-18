@@ -74,7 +74,7 @@ ctl boot await --timeout 120 >/dev/null || { docker logs "$CONTROLLER" | tail -3
 ctl plugin list --installed | grep -q 'flezha_http 0.1.0  loaded' || fail install "the package is not loaded"
 
 say "the runner on the host, the gateway on 0.0.0.0"
-build_chat
+build_runner
 FLEZHA_SOCKET_FILES_PATH=$TMP/s start_runner runner default
 web='[{"name":"web","provider":"http_server","hooks":["on_terminate"],"opts":{"port":"18080","bind":"0.0.0.0","channel":"http","pass_headers":"x-api-key"}}]'
 until_ok 60 "ctl relay start gateway --id gateway --plugins '$web'" || { say "gateway did not start"; exit 1; }
