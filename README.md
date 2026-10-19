@@ -60,23 +60,14 @@ MIX_ENV=prod RUSTLER_SKIP_COMPILATION=true mix flezha.plugin.package
 
 The archive is `_build/flezha_http-0.1.0.fpz`. It bundles Bandit, Plug, ThousandIsland,
 WebSock, `mime` and `plug_crypto`, and nothing the release ships. For a controller image,
-package it in the image's `plugin-builder` stage, so its OTP is the image's:
-
-```
-docker build --target plugin-builder -t flezha/plugin-builder ../..
-docker run --rm -v /path/to/flezha:/src -w /src/plugins/flezha_http_plugin flezha/plugin-builder \
-  sh -c 'MIX_ENV=prod mix deps.get && MIX_ENV=prod RUSTLER_SKIP_COMPILATION=true mix flezha.plugin.package'
-```
+package it in the image's `plugin-builder` stage, so its OTP is the image's, as the
+[example](https://github.com/flezha/flezha/blob/main/docs/public/topics/plugins/installing_plugins.md#example) of Installing plugins shows.
 
 ## Installing into a local release
 
-```
-flz plugin install _build/flezha_http-0.1.0.fpz
-flz controller stop && flz controller start
-flz plugin list --installed
-```
-
-Then enable `http_server` on a relay as `docs/public/plugins/http_server.md` shows.
+Install `_build/flezha_http-0.1.0.fpz` on a controller and restart it, as
+[Installing plugins](https://github.com/flezha/flezha/blob/main/docs/public/topics/plugins/installing_plugins.md#install-uninstall-and-sync)
+describes. Then enable `http_server` on a relay as `docs/public/plugins/http_server.md` shows.
 
 ## The end-to-end run
 
