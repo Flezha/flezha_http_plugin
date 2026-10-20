@@ -11,93 +11,87 @@ defmodule FlezhaHttp.Provider do
 
   alias Flezha.Plugin.Extension.Ctx
   alias Flezha.Plugin.ProviderBehaviour
+  alias Flezha.Plugin.ProviderBehaviour.Options
 
   use ProviderBehaviour,
     name: "http_server",
     feeds: true,
-    options: [
-      port: [
-        type: :int,
-        required: true,
-        min: 1,
-        max: 65_535,
-        doc: "The TCP port the server listens on, 1 to 65535"
-      ],
-      bind: [
-        type: :string,
-        default: "127.0.0.1",
-        doc: "The address it listens on: an IPv4 or IPv6 literal, never a name"
-      ],
-      channel: [
-        type: :names,
-        doc:
-          "The entry channel every request is injected on, one name. Required, unless `channel_in` names it"
-      ],
-      channel_in: [
-        type: :names,
-        doc: "The explicit spelling of `channel`. Required, unless `channel` names it"
-      ],
-      answer_channel: [
-        type: :string,
-        doc: "The relay's channel whose output answers a request; the first output when unset"
-      ],
-      deadline_ms: [
-        type: :int,
-        default: 30_000,
-        min: 100,
-        max: 600_000,
-        doc: "How long a request waits for the relay's answer, 100 to 600000"
-      ],
-      max_body_bytes: [
-        type: :int,
-        default: 1_048_576,
-        min: 1,
-        max: 16_777_216,
-        doc: "The largest request body accepted, up to 16777216; a larger one is answered 413"
-      ],
-      max_waiting: [
-        type: :int,
-        default: 1_000,
-        min: 1,
-        max: 100_000,
-        doc: "Requests waiting for an answer at once, up to 100000; one more is answered 503"
-      ],
-      max_streams: [
-        type: :int,
-        default: 1_000,
-        min: 1,
-        max: 100_000,
-        doc: "Event streams open at once, up to 100000; one more is answered 503"
-      ],
-      pass_headers: [
-        type: :names,
-        default: [],
-        doc: "Request headers copied into the request envelope, lower-case names; none by default"
-      ],
-      max_connections: [
-        type: :int,
-        default: 1_000,
-        min: 1,
-        max: 100_000,
-        doc:
-          "Connections open at once, streams and waiting requests included; one more is closed at once"
-      ],
-      heartbeat_ms: [
-        type: :int,
-        default: 15_000,
-        min: 1_000,
-        max: 300_000,
-        doc: "How long a quiet stream waits before it writes a comment line, 1000 to 300000"
-      ],
-      stream_wait_ms: [
-        type: :int,
-        default: 5_000,
-        min: 0,
-        max: 60_000,
-        doc:
-          "How long a stream waits for the relay it names to exist, up to 60000; 0 answers 404 at once"
-      ]
-    ],
+    options:
+      [
+        port: [
+          type: :int,
+          required: true,
+          min: 1,
+          max: 65_535,
+          doc: "The TCP port the server listens on, 1 to 65535"
+        ],
+        bind: [
+          type: :string,
+          default: "127.0.0.1",
+          doc: "The address it listens on: an IPv4 or IPv6 literal, never a name"
+        ],
+        answer_channel: [
+          type: :string,
+          doc: "The relay's channel whose output answers a request; the first output when unset"
+        ],
+        deadline_ms: [
+          type: :int,
+          default: 30_000,
+          min: 100,
+          max: 600_000,
+          doc: "How long a request waits for the relay's answer, 100 to 600000"
+        ],
+        max_body_bytes: [
+          type: :int,
+          default: 1_048_576,
+          min: 1,
+          max: 16_777_216,
+          doc: "The largest request body accepted, up to 16777216; a larger one is answered 413"
+        ],
+        max_waiting: [
+          type: :int,
+          default: 1_000,
+          min: 1,
+          max: 100_000,
+          doc: "Requests waiting for an answer at once, up to 100000; one more is answered 503"
+        ],
+        max_streams: [
+          type: :int,
+          default: 1_000,
+          min: 1,
+          max: 100_000,
+          doc: "Event streams open at once, up to 100000; one more is answered 503"
+        ],
+        pass_headers: [
+          type: :names,
+          default: [],
+          doc:
+            "Request headers copied into the request envelope, lower-case names; none by default"
+        ],
+        max_connections: [
+          type: :int,
+          default: 1_000,
+          min: 1,
+          max: 100_000,
+          doc:
+            "Connections open at once, streams and waiting requests included; one more is closed at once"
+        ],
+        heartbeat_ms: [
+          type: :int,
+          default: 15_000,
+          min: 1_000,
+          max: 300_000,
+          doc: "How long a quiet stream waits before it writes a comment line, 1000 to 300000"
+        ],
+        stream_wait_ms: [
+          type: :int,
+          default: 5_000,
+          min: 0,
+          max: 60_000,
+          doc:
+            "How long a stream waits for the relay it names to exist, up to 60000; 0 answers 404 at once"
+        ]
+      ] ++ Options.channel(:in, "request"),
     worker: [
       module: FlezhaHttp.Server,
       restart: :transient,

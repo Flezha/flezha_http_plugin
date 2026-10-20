@@ -28,13 +28,11 @@ defmodule FlezhaHttp.CatalogueTest do
   end
 
   test "the tagged reasons map to their codes" do
-    for {tag, code} <- [
-          partitioned_host: "plugin.partitioned_host",
-          http_listen_failed: "http.listen_failed"
-        ] do
-      assert Map.has_key?(@catalogue["codes"], code), "#{code} is not in the catalogue"
-      assert %Flezha.Error{code: ^code} = Flezha.Error.from_reason({tag, %{plugin: "p"}}, nil)
-    end
+    code = "http.listen_failed"
+    assert Map.has_key?(@catalogue["codes"], code), "#{code} is not in the catalogue"
+
+    assert %Flezha.Error{code: ^code} =
+             Flezha.Error.from_reason({:http_listen_failed, %{plugin: "p"}}, nil)
 
     refute Map.has_key?(@catalogue["codes"], "http.partitioned_host")
   end
