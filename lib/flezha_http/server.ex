@@ -12,9 +12,10 @@ defmodule FlezhaHttp.Server do
   it cannot bind stops it with `{:http_listen_failed, details}`.
   """
 
-  use GenServer
-
+  alias Flezha.Plugin.Provider.Worker
   alias Flezha.Plugin.ProviderBehaviour
+
+  use Worker
 
   # Each slot: its counter and the option capping it.
   @slots %{waiting: {1, :max_waiting}, streams: {2, :max_streams}}
@@ -22,10 +23,6 @@ defmodule FlezhaHttp.Server do
 
   # Plug's own default for one body read.
   @body_timeout_ms 15_000
-
-  @doc false
-  def start_link(opts) when is_map(opts),
-    do: GenServer.start_link(__MODULE__, opts, name: Map.fetch!(opts, :name))
 
   @doc "Whether the table may hand this worker to an Overwatch: never once its own host is gone."
   @spec reusable?(pid()) :: boolean()
@@ -96,7 +93,7 @@ defmodule FlezhaHttp.Server do
          %{
            bandit: bandit,
            host: host,
-           host_ref: Process.monitor(host),
+           watch: Worker.host(opts),
            counters: counters,
            address: address_text(opts.bind, opts.port)
          }}
@@ -133,9 +130,6 @@ defmodule FlezhaHttp.Server do
   defp tls(_opts), do: []
 
   @impl true
-  def handle_info({:DOWN, ref, :process, _pid, _reason}, %{host_ref: ref} = state),
-    do: {:stop, :normal, state}
-
   def handle_info({:EXIT, bandit, reason}, %{bandit: bandit} = state),
     do: {:stop, {:bandit_exited, reason}, %{state | bandit: nil}}
 
