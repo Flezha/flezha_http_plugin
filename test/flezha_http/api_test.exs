@@ -308,6 +308,24 @@ defmodule FlezhaHttp.ApiTest do
       assert_received {:door, "Relay.call_channel", _args, @viewer}
     end
 
+    # Fails when: the door hands the call no deadline of its own, so the
+    # controller's longer default outlives the door and the caller reads
+    # control.timeout instead of the call's own timeout.
+    test "a call its graph never answers times out as call.timeout inside the door's deadline" do
+      # The stand-in controller answers call.timeout once the call's deadline
+      # passes, its own longer default when the door names none.
+      never_answers = fn "Relay.call_channel", [_, _, _, _, opts] ->
+        deadline_ms = Map.get(opts, "deadline_ms", 2_000)
+        Process.sleep(deadline_ms)
+        {:error, Error.new("call.timeout", deadline_ms: deadline_ms)}
+      end
+
+      config = config(context: @app, deadline_ms: 300, answer: never_answers)
+      conn = request(:post, "/v1/relays/orders-eu/place", "{}", [], config)
+
+      assert json(conn)["error"]["code"] == "call.timeout"
+    end
+
     test "only POST reaches it" do
       conn = request(:get, "/v1/relays/orders-eu/place")
       assert conn.status == 405
