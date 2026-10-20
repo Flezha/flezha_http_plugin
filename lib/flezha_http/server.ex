@@ -169,6 +169,5 @@ defmodule FlezhaHttp.Server do
   # reason (`:eaddrinuse`, `:eaddrnotavail`, `:eacces`) is what a user can act on.
   defp cause({:shutdown, {:failed_to_start_child, _child, reason}}), do: cause(reason)
   defp cause({:listen_error, reason}), do: cause(reason)
-  defp cause(reason) when is_atom(reason), do: reason
-  defp cause(reason), do: inspect(reason)
+  defp cause(reason), do: reason
 end
