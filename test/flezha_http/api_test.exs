@@ -106,6 +106,14 @@ defmodule FlezhaHttp.ApiTest do
       end
     end
 
+    # Fails when: an empty bearer is taken for no token.
+    test "a bearer empty after trimming is a malformed token, not a missing one" do
+      config = config(verify: &Flezha.Service.Admin.context(:http, &1))
+      conn = anonymous(:get, "/v1/catalogue", [{"authorization", "Bearer  "}], config)
+      assert conn.status == 401
+      assert json(conn)["error"]["code"] == "authz.token_malformed"
+    end
+
     test "a missing header's hint names the header" do
       conn = anonymous(:get, "/v1/catalogue", [])
       assert json(conn)["error"]["hint"] =~ "Authorization: Bearer"

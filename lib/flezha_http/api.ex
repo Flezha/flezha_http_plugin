@@ -26,7 +26,7 @@ defmodule FlezhaHttp.Api do
   alias Flezha.Config.Durations
   alias Flezha.Error
   alias Flezha.Service.Admin
-  alias Flezha.Service.CallerContext
+  alias Flezha.Service.RelayApi
   alias FlezhaHttp.Handler
   alias FlezhaHttp.Server
   alias FlezhaHttp.Status
@@ -37,7 +37,7 @@ defmodule FlezhaHttp.Api do
   @impl true
   def init(config) do
     Map.merge(
-      %{verify: &CallerContext.from_token(:http, &1), admin: &Admin.call/4},
+      %{verify: &Admin.context(:http, &1), admin: &Admin.call/4},
       config
     )
   end
@@ -197,27 +197,21 @@ defmodule FlezhaHttp.Api do
     args = [namespace(context), relay, channel, Base.encode64(body), opts]
 
     case door(context, config).("Relay.call_channel", args) do
-      {:ok, json} -> conn |> named("Relay.call_channel") |> send_answer(Jason.decode!(json))
+      {:ok, json} -> conn |> named("Relay.call_channel") |> send_answer(RelayApi.answer(json))
       {:error, error} -> Status.send_error(conn, error)
     end
   end
 
-  defp send_answer(conn, %{"accepted" => true}),
-    do: send_json(conn, 202, ~s({"accepted":true}))
+  defp send_answer(conn, :accepted), do: send_json(conn, 202, ~s({"accepted":true}))
+  defp send_answer(conn, {:json, answer}), do: send_json(conn, 200, Jason.encode!(answer))
 
-  defp send_answer(conn, %{"answer_codec" => "json", "answer" => answer}),
-    do: send_json(conn, 200, Jason.encode!(answer))
+  defp send_answer(conn, {:text, text}),
+    do: conn |> Plug.Conn.put_resp_content_type("text/plain") |> Plug.Conn.send_resp(200, text)
 
-  defp send_answer(conn, %{"answer_codec" => "text", "answer" => answer}) do
-    conn
-    |> Plug.Conn.put_resp_content_type("text/plain")
-    |> Plug.Conn.send_resp(200, answer)
-  end
-
-  defp send_answer(conn, %{"answer" => answer}) do
+  defp send_answer(conn, {:bytes, bytes}) do
     conn
     |> Plug.Conn.put_resp_content_type("application/octet-stream", nil)
-    |> Plug.Conn.send_resp(200, Base.decode64!(answer))
+    |> Plug.Conn.send_resp(200, bytes)
   end
 
   # The namespace the token is bound to; a caller bound to none acts in the
