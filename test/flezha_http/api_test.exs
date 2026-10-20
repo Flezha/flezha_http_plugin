@@ -230,7 +230,13 @@ defmodule FlezhaHttp.ApiTest do
       assert json(conn) == %{"status" => "placed"}
 
       assert_received {:door, "Relay.call_channel",
-                       ["default", "orders-eu", "place", encoded, %{"payload" => "base64"}], @app}
+                       [
+                         "default",
+                         "orders-eu",
+                         "place",
+                         encoded,
+                         %{"payload" => "base64", "deadline_ms" => 500}
+                       ], @app}
 
       assert Base.decode64!(encoded) == body
     end

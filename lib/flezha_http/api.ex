@@ -23,6 +23,7 @@ defmodule FlezhaHttp.Api do
 
   @behaviour Plug
 
+  alias Flezha.Config.Durations
   alias Flezha.Error
   alias Flezha.Service.Admin
   alias Flezha.Service.CallerContext
@@ -184,10 +185,15 @@ defmodule FlezhaHttp.Api do
   end
 
   # A relay's channel, called with the body as its payload and `?key=` as the
-  # key whose partition answers; the answer is sent in its own format.
+  # key whose partition answers; the answer is sent in its own format. The
+  # call's deadline leaves the door `call_grace_ms` (the caller's wait past
+  # it), so a relay that does not answer is `call.timeout`, not the door's.
   defp call_relay(conn, relay, channel, body, context, config) do
     key = Plug.Conn.fetch_query_params(conn).query_params["key"]
-    opts = Map.put(if(is_binary(key), do: %{"key" => key}, else: %{}), "payload", "base64")
+    door = config.deadline_ms
+    deadline_ms = max(door - Durations.get(:call_grace_ms), div(door, 2))
+    opts = %{"payload" => "base64", "deadline_ms" => deadline_ms}
+    opts = if is_binary(key), do: Map.put(opts, "key", key), else: opts
     args = [namespace(context), relay, channel, Base.encode64(body), opts]
 
     case door(context, config).("Relay.call_channel", args) do
