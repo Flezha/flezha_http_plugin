@@ -691,20 +691,19 @@ defmodule FlezhaHttp.ApiTest do
 
       assert_received {:answered, call, relay, mcp}
 
-      public = %{
-        "code" => "internal.uncatalogued",
-        "class" => "internal",
-        "message" => "an unexpected failure: the controller's log names the cause",
-        "details" => %{"reason" => "the controller's log names the cause"},
-        "hint" => nil
-      }
+      for conn <- [call, relay], do: assert(conn.status == 500)
+      errors = [json(call)["error"], json(relay)["error"]]
 
-      for conn <- [call, relay] do
-        assert conn.status == 500
-        assert json(conn)["error"] == public
+      for error <- [json(mcp)["result"]["structuredContent"]["error"] | errors] do
+        assert %{"code" => "internal.uncatalogued", "class" => "internal", "hint" => nil} = error
+
+        assert %{"details" => %{"reason" => "the controller's log names the cause (ref " <> _}} =
+                 error
+
+        assert error["message"] == "an unexpected failure: " <> error["details"]["reason"]
+        assert map_size(error) == 5 and map_size(error["details"]) == 1
       end
 
-      assert json(mcp)["result"]["structuredContent"]["error"] == public
       refute Enum.any?([call, relay, mcp], &(&1.resp_body =~ "noproc"))
 
       assert log =~
