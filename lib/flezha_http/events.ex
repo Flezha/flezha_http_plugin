@@ -13,6 +13,7 @@ defmodule FlezhaHttp.Events do
   """
 
   alias Flezha.Error
+  alias Flezha.Process.Poll
   alias FlezhaHttp.Server
   alias FlezhaHttp.Status
 
@@ -47,20 +48,21 @@ defmodule FlezhaHttp.Events do
 
   defp attach(target, headers, config, until) do
     opts = [window_ms: :infinity, idle_ms: config.heartbeat_ms, before: fn -> open(headers) end]
-    outcome = config.listen.(config.namespace, target, opts, &write/1)
-    conn = Process.get(@conn_key)
+    attempt = fn -> attached(config.listen.(config.namespace, target, opts, &write/1)) end
+    {_attached?, outcome} = Poll.until(until, @retry_ms, attempt)
+    answer(outcome, Process.get(@conn_key))
+  end
 
+  # Only a target that does not exist yet, refused before anything was written,
+  # is attached again.
+  defp attached({:error, %Error{code: "relay.not_found"}} = absent) do
+    if Process.get(@conn_key).state == :unset, do: {:error, absent}, else: {:ok, absent}
+  end
+
+  defp attached(outcome), do: {:ok, outcome}
+
+  defp answer(outcome, conn) do
     case {outcome, conn.state} do
-      {{:error, %Error{code: "relay.not_found"}}, :unset} ->
-        case until - now() do
-          left when left > 0 ->
-            Process.sleep(min(left, @retry_ms))
-            attach(target, headers, config, until)
-
-          _passed ->
-            Status.send_error(conn, Status.public(elem(outcome, 1)))
-        end
-
       {{:error, %Error{} = error}, :unset} ->
         Status.send_error(conn, Status.public(error))
 
