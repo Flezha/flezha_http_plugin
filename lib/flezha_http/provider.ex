@@ -9,13 +9,13 @@ defmodule FlezhaHttp.Provider do
   `docs/public/plugins/http_server.md`.
   """
 
-  alias Flezha.Plugin.Extension.Ctx
   alias Flezha.Plugin.ProviderBehaviour
   alias Flezha.Plugin.ProviderBehaviour.Options
 
   use ProviderBehaviour,
     name: "http_server",
-    feeds: true,
+    # A client cannot address a port per member of a group without knowing the key.
+    source: [partitioned: :refuse, probe: false],
     options:
       [
         port: [
@@ -111,10 +111,7 @@ defmodule FlezhaHttp.Provider do
   """
   @impl true
   def init_provider(opts) do
-    # A client cannot address a port per member of a group without knowing the key.
-    with :ok <- ProviderBehaviour.refuse_partitioned(opts, __MODULE__),
-         :ok <- ProviderBehaviour.require_entry_channel(opts, __MODULE__),
-         {:ok, _address} <- address(opts.bind),
+    with {:ok, _address} <- address(opts.bind),
          :ok <- check_pass_headers(opts.pass_headers) do
       {:ok, opts}
     end
@@ -141,10 +138,6 @@ defmodule FlezhaHttp.Provider do
   @impl true
   def worker_specs(opts),
     do: [{{opts.source_namespace, opts.source_relay_id, opts.source_plugin_id}, opts}]
-
-  @doc "The server drives itself; the hook is there because a plugin spec must name one."
-  @impl true
-  def on_terminate(%Ctx.Terminate{}, _opts), do: :ok
 
   @impl true
   def inspect_state(opts) do
