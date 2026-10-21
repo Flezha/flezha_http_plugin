@@ -46,8 +46,8 @@ say "packaging the plugin inside the builder"
 INNER="flezha/plugins/$(basename "$PLUGIN")"
 mkdir -p "$TMP/pkg" "$TMP/s" "$TMP/code/flezha" "$TMP/code/$INNER"
 (cd "$CORE" && tar -cf - --exclude='_build' --exclude='deps' --exclude='target' \
-  mix.exs mix.lock config lib protobufs rel flz_transport/errors.json flz_core/src/schema.rs \
-  flz_core_ffi/src/veneer/shape.rs openspec/specs/java-sdk/spec.md test/fixtures sdk/elixir) |
+  mix.exs mix.lock config lib protobufs rel crates/flz_transport/errors.json crates/flz_core/src/schema.rs \
+  crates/flz_core_ffi/src/veneer/shape.rs openspec/specs/java-sdk/spec.md test/fixtures sdk/elixir) |
   tar -xf - -C "$TMP/code/flezha"
 (cd "$PLUGIN" && tar -cf - --exclude='_build' --exclude='deps' --exclude='test/e2e' .) |
   tar -xf - -C "$TMP/code/$INNER"
@@ -66,7 +66,7 @@ fi
 
 say "the controller container, the package installed"
 docker run -d --name "$CONTROLLER" -e FLEZHA_DURABILITY_BACKEND=none -e FLEZHA_AUTHZ_ENABLED=false \
-  -v "$TMP/s:/flezha/app_data/sockets" -v "$TMP/pkg:/pkgs:ro" -p 127.0.0.1:18080:18080 "$RUNTIME" >/dev/null
+  -v "$TMP/s:/flezha/storage/app/sockets" -v "$TMP/pkg:/pkgs:ro" -p 127.0.0.1:18080:18080 "$RUNTIME" >/dev/null
 ctl boot await --timeout 120 >/dev/null || { docker logs "$CONTROLLER" | tail -30; exit 1; }
 ctl plugin install /pkgs/flezha_http-0.1.0.fpz >"$TMP/out/install.log" 2>&1 || { cat "$TMP/out/install.log"; exit 1; }
 docker restart "$CONTROLLER" >/dev/null

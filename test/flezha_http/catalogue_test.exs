@@ -6,7 +6,7 @@ defmodule FlezhaHttp.CatalogueTest do
   use ExUnit.Case, async: true
 
   @catalogue Mix.Project.deps_paths()[:flezha]
-             |> Path.join("flz_transport/errors.json")
+             |> Path.join("crates/flz_transport/errors.json")
              |> File.read!()
              |> Jason.decode!()
 
@@ -24,7 +24,7 @@ defmodule FlezhaHttp.CatalogueTest do
     assert "http.answer_invalid" in named
 
     assert named -- codes == [],
-           "not in flz_transport/errors.json: #{Enum.join(named -- codes, ", ")}"
+           "not in crates/flz_transport/errors.json: #{Enum.join(named -- codes, ", ")}"
   end
 
   test "the tagged reasons map to their codes" do

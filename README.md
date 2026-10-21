@@ -45,7 +45,7 @@ RUSTLER_SKIP_COMPILATION=true mix format --check-formatted
 `RUSTLER_SKIP_COMPILATION=true` keeps the core's native library out of the build: a plugin
 never loads it. `mix test` runs with `--no-start`, so no controller boots; the tests start
 Bandit alone and stand in for the relay. The catalogue test fails when a code the plugin
-uses is missing from the core's `flz_transport/errors.json`, and the docs test when the
+uses is missing from the core's `crates/flz_transport/errors.json`, and the docs test when the
 option table of `docs/public/plugins/http_server.md` or `docs/public/plugins/http_api.md` differs from
 its provider's declaration, printing the table to put there.
 
