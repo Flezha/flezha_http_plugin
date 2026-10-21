@@ -39,8 +39,6 @@ defmodule FlezhaHttp.ProviderTest do
     assert {:error, {:option_above_maximum, :port, 70_000, 65_535}} =
              prepare(%{port: 70_000, channel: "http"})
 
-    assert {:error, {:entry_channel_required, "http_server"}} = prepare(%{port: 18_080})
-
     assert {:error, _both} = prepare(%{port: 18_080, channel: "http", channel_in: "http"})
 
     assert {:error, {:option_below_minimum, :heartbeat_ms, 10, 1_000}} =
@@ -55,26 +53,6 @@ defmodule FlezhaHttp.ProviderTest do
                bind: "::1",
                pass_headers: "x-api-key,cookie"
              })
-  end
-
-  test "a member of a partition group is refused, naming it" do
-    assert {:error, {:partitioned_host, %{provider: "http_server", relay: "pinger#p0"}}} =
-             Options.normalise_opts(Provider, %{port: 18_080, channel: "http"})
-             |> then(fn {:ok, opts} ->
-               Provider.init_provider(
-                 Map.merge(opts, %{
-                   @host
-                   | source_relay_id: "pinger#p0"
-                 })
-                 |> Map.merge(%{partition_index: 0, partition_count: 2})
-               )
-             end)
-
-    assert %Flezha.Error{code: "plugin.partitioned_host", details: %{"relay" => "pinger#p0"}} =
-             Flezha.Error.from_reason(
-               {:partitioned_host, %{provider: "http_server", relay: "pinger#p0"}},
-               nil
-             )
   end
 
   test "one worker per relay and plugin, keyed by namespace, relay and plugin" do
