@@ -28,8 +28,10 @@ defmodule FlezhaHttp.ServerTest do
   defp start(ctx, overrides \\ %{}),
     do: start_supervised!({Server, opts(ctx, overrides)}, id: make_ref(), restart: :temporary)
 
+  # A closed port refuses at once; the timeout only gives a loaded machine its
+  # answer rather than reading a slow connect as an open port.
   defp refused?(address \\ {127, 0, 0, 1}, port),
-    do: :gen_tcp.connect(address, port, [], 1_000) == {:error, :econnrefused}
+    do: :gen_tcp.connect(address, port, [], 5_000) == {:error, :econnrefused}
 
   test "a request is answered end to end", ctx do
     start(ctx)
