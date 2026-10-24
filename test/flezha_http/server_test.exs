@@ -115,7 +115,7 @@ defmodule FlezhaHttp.ServerTest do
              {:ok, %{address: "127.0.0.1:#{ctx.port}", waiting: 0, streams: 0, refused: 0}}
 
     task = Task.async(fn -> Client.request(ctx.port, "GET", "/slow") end)
-    assert_receive {:waiting, answering}
+    assert_receive {:waiting, answering}, 5_000
     assert {503, _, _} = Client.request(ctx.port, "GET", "/slow")
     assert {:ok, %{waiting: 1, streams: 0, refused: 1}} = Server.probe(server)
 
