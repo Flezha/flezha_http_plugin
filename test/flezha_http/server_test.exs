@@ -165,13 +165,15 @@ defmodule FlezhaHttp.ServerTest do
   test "a body sent slower than its one deadline is answered 408", ctx do
     start(ctx, body_timeout_ms: 500)
     {:ok, socket} = :gen_tcp.connect({127, 0, 0, 1}, ctx.port, [:binary, active: false])
-    :ok = :gen_tcp.send(socket, "POST / HTTP/1.1\r\nhost: x\r\ncontent-length: 262144\r\n\r\n")
+    :ok = :gen_tcp.send(socket, "POST / HTTP/1.1\r\nhost: x\r\ncontent-length: 1048576\r\n\r\n")
 
-    # Four 64 KiB pieces 300 ms apart: every read sees data well inside 500 ms,
-    # the whole body takes about a second.
+    # 1 KiB every 100 ms: every read sees data well inside 500 ms, and the body
+    # takes over a minute, so however late the handler starts reading, only
+    # the one deadline over the whole body can end it.
     sender =
       spawn(fn ->
-        for _ <- 1..4, do: :gen_tcp.send(socket, :binary.copy("a", 65_536)) && Process.sleep(300)
+        for _ <- 1..1_024,
+            do: :gen_tcp.send(socket, :binary.copy("a", 1_024)) && Process.sleep(100)
       end)
 
     {:ok, response} = :gen_tcp.recv(socket, 0, 5_000)
