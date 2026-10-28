@@ -1,12 +1,16 @@
 defmodule FlezhaHttp.Client do
   @moduledoc "A small HTTP/1.1 client over Mint for the tests that drive a real server."
 
-  @doc "A loopback port nothing listens on at the moment of asking."
+  @doc """
+  A loopback port nothing listens on at the moment of asking, and one no other
+  test of this run was given: the kernel hands a freed port out again soon, and
+  two tests running at once on one port would answer each other.
+  """
   def free_port() do
     {:ok, socket} = :gen_tcp.listen(0, ip: {127, 0, 0, 1})
     {:ok, port} = :inet.port(socket)
     :ok = :gen_tcp.close(socket)
-    port
+    if :ets.insert_new(__MODULE__, {port}), do: port, else: free_port()
   end
 
   @doc "One request, read to its end: `{status, headers, body}`."
