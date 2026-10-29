@@ -672,28 +672,28 @@ defmodule FlezhaHttp.ApiTest do
   end
 
   describe "an operation that fails unexpectedly" do
-    # No controller runs here, so `Relay.list_namespaces` exits on the hub
+    # No controller runs here, so `Controller.boot_status` exits on the hub
     # manager it calls. A relay's channel answers cleanly with no relay, so its
     # route reaches that operation through the door in its place.
     # Fails when: a network caller is answered the failure's own text, or the
     # controller's log loses it.
     test "every route answers its code alone, and the log names the cause" do
       # Loaded as a release loads it: a name is resolved to existing atoms only.
-      Code.ensure_loaded!(Flezha.Service.Relay)
+      Code.ensure_loaded!(Flezha.Service.Controller)
       real = config(admin: &Flezha.Service.Admin.call/4)
 
       raising =
         config(
           admin: fn _name, _args, caller, placement ->
-            Flezha.Service.Admin.call("Relay.list_namespaces", "[]", caller, placement)
+            Flezha.Service.Admin.call("Controller.boot_status", "[]", caller, placement)
           end
         )
 
       log =
         capture_log(fn ->
-          call = request(:post, "/v1/call/Relay.list_namespaces", "[]", [], real)
+          call = request(:post, "/v1/call/Controller.boot_status", "[]", [], real)
           relay = request(:post, "/v1/relays/orders-eu/place", "{}", [], raising)
-          tool = %{"name" => "relay_list_namespaces", "arguments" => %{}}
+          tool = %{"name" => "controller_boot_status", "arguments" => %{}}
           send(self(), {:answered, call, relay, mcp("tools/call", tool, config: real)})
         end)
 
@@ -715,7 +715,7 @@ defmodule FlezhaHttp.ApiTest do
       refute Enum.any?([call, relay, mcp], &(&1.resp_body =~ "noproc"))
 
       assert log =~
-               "Relay.list_namespaces failed for a http caller: internal.uncatalogued"
+               "Controller.boot_status failed for a http caller: internal.uncatalogued"
 
       assert log =~ "{:noproc, {GenServer, :call, [Flezha.Service.HubManager"
     end
