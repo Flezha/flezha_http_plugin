@@ -420,7 +420,7 @@ defmodule FlezhaHttp.ApiTest do
       ops = json(request(:get, "/v1/catalogue", "", [], config(context: @ops)))["operations"]
       refute Enum.any?(ops, &(&1["name"] in ["Controller.stop", "Relay.listen"]))
 
-      assert %{"name" => "Dlq.list", "args" => [%{"name" => "relay_class"}]} =
+      assert %{"name" => "Dlq.list", "args" => [%{"name" => "relay_class"}, %{"name" => "opts"}]} =
                Enum.find(ops, &(&1["name"] == "Dlq.list"))
     end
   end
@@ -541,7 +541,8 @@ defmodule FlezhaHttp.ApiTest do
     end
 
     test "tools/call maps the named arguments onto the door's array" do
-      answer = fn "Relay.list", ["default"] -> {:ok, ~s([{"id":"echo"}])} end
+      # An optional argument the call leaves out is sent as `nil`.
+      answer = fn "Relay.list", ["default", nil] -> {:ok, ~s([{"id":"echo"}])} end
 
       conn =
         mcp(
