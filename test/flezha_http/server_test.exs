@@ -493,5 +493,34 @@ defmodule FlezhaHttp.ServerTest do
       assert %{status: 200, body: body} = responses[call]
       assert IO.iodata_to_binary(body) == ~s(["r1"])
     end
+
+    test "a stream the client resets ends its operation at once", ctx do
+      test = self()
+
+      tls_api(ctx, fn "Relay.listen", _args, caller, :given ->
+        send(test, {:listening, self()})
+        send(caller.emit, {:flezha_emit, :attached})
+        Process.sleep(:infinity)
+      end)
+
+      {:ok, conn} =
+        Mint.HTTP.connect(:https, "127.0.0.1", ctx.port,
+          mode: :passive,
+          protocols: [:http2],
+          transport_opts: client_tls(ctx, "api/client")
+        )
+
+      {:ok, conn, ref} =
+        Mint.HTTP.request(conn, "POST", "/v1/stream/Relay.listen", bearer(), ~s(["a"]))
+
+      assert_receive {:listening, operation}, 5_000
+      monitor = Process.monitor(operation)
+
+      {:ok, conn} = Mint.HTTP2.cancel_request(conn, ref)
+
+      # The heartbeat is 15 s, so only the reset itself can end it this soon.
+      assert_receive {:DOWN, ^monitor, :process, ^operation, _reason}, 2_000
+      Mint.HTTP.close(conn)
+    end
   end
 end

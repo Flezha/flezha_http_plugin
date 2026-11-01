@@ -99,6 +99,11 @@ defmodule FlezhaHttp.Events do
       {^ref, answer} ->
         Process.demonitor(ref, [:flush])
         ended(answer)
+
+      # An HTTP/2 client that resets the stream has left: the operation ends
+      # now rather than at the next write.
+      {:bandit, {:rst_stream, _code}} ->
+        Process.get(@conn_key)
     after
       quiet(config) -> relayed(send_chunk(":\n\n"), ref, context, config)
     end
