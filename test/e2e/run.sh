@@ -275,6 +275,20 @@ check_n() {
   fi
 }
 
+check_u() {
+  flz plugin enable api http_api --namespace _system --Xport=18090 >"$TMP/out/u.api" 2>&1
+  flz plugin enable web4 http_server --relay_id=pinger --hook=on_terminate --Xport=18090 --Xchannel=http \
+    >"$TMP/out/u.enable" 2>&1
+  local refused=$?
+  flz plugin disable web4 >/dev/null 2>&1
+  flz plugin disable api --namespace _system >/dev/null 2>&1
+  if [ $refused != 0 ] && grep -q 'http.port_reserved' "$TMP/out/u.enable"; then
+    pass u "a server on the HTTP API's port 18090 is refused with http.port_reserved"
+  else
+    fail u "enable exit $refused: $(cat "$TMP/out/u.api" "$TMP/out/u.enable")"
+  fi
+}
+
 check_o() {
   flz relay info gateway >"$TMP/out/o.info" 2>&1
   if grep -q '127.0.0.1:18080' "$TMP/out/o.info" && grep -q 'waiting' "$TMP/out/o.info" &&
@@ -346,7 +360,7 @@ print(f"TIMING stream open: n={len(t)} mean={sum(t)/len(t):.1f} ms max={max(t):.
 # Sourced (by run_docker.sh), it only defines the checks.
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 
-CHECKS=${*:-a b c d e f g h i j k l t m n o p r s q}
+CHECKS=${*:-a b c d e f g h i j k l t m n u o p r s q}
 controller_env "$TMP" "flzhttp$$" "$REL"
 trap stop_all EXIT
 setup

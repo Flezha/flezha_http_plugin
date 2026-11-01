@@ -45,6 +45,25 @@ defmodule FlezhaHttp.ProviderTest do
              prepare(%{port: 18_080, channel: "http", heartbeat_ms: 10})
   end
 
+  test "a port the controller holds is refused, naming its owner" do
+    reserved = [{9_569, "FLEZHA_HEALTHZ_PORT"}, {8_765, "http_api"}]
+
+    assert {:error, {:http_port_reserved, 8_765, "http_api"}} =
+             Provider.reserved_port(8_765, reserved)
+
+    assert {:error, {:http_port_reserved, 9_569, "FLEZHA_HEALTHZ_PORT"}} =
+             Provider.reserved_port(9_569, reserved)
+
+    assert :ok = Provider.reserved_port(18_081, reserved)
+  end
+
+  test "an enable on the configured health port is refused" do
+    port = Flezha.Config.get(:healthz_port)
+
+    assert {:error, {:http_port_reserved, ^port, "FLEZHA_HEALTHZ_PORT"}} =
+             prepare(%{port: port, channel: "http"})
+  end
+
   test "an IPv6 literal and lower-case header names are accepted" do
     assert {:ok, %{bind: "::1", pass_headers: ["x-api-key", "cookie"]}} =
              prepare(%{

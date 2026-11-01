@@ -11,6 +11,7 @@ defmodule FlezhaHttp.Provider do
 
   alias Flezha.Plugin.ProviderBehaviour
   alias Flezha.Plugin.ProviderBehaviour.Options
+  alias Flezha.Service.Controller
 
   use ProviderBehaviour,
     name: "http_server",
@@ -106,14 +107,29 @@ defmodule FlezhaHttp.Provider do
   def token?(name), do: is_binary(name) and Regex.match?(@token, name)
 
   @doc """
-  Validate without I/O: the address is parsed, never resolved, and nothing is
-  opened or started; the worker binds at activation.
+  Validate without opening anything: the address is parsed, never resolved, the
+  port is checked against the controller's own HTTP surfaces, and nothing is
+  started; the worker binds at activation.
   """
   @impl true
   def init_provider(opts) do
     with {:ok, _address} <- address(opts.bind),
-         :ok <- check_pass_headers(opts.pass_headers) do
+         :ok <- check_pass_headers(opts.pass_headers),
+         :ok <- reserved_port(opts.port, Controller.reserved_ports()) do
       {:ok, opts}
+    end
+  end
+
+  @doc """
+  `:ok`, or a refusal naming `port` and its owner when the controller's own
+  surfaces hold it (`Flezha.Service.Controller.reserved_ports/0`): a server that
+  took it first would leave the controller without that surface.
+  """
+  @spec reserved_port(pos_integer(), [{pos_integer(), String.t()}]) :: :ok | {:error, term()}
+  def reserved_port(port, reserved) do
+    case List.keyfind(reserved, port, 0) do
+      {^port, owner} -> {:error, {:http_port_reserved, port, owner}}
+      nil -> :ok
     end
   end
 
