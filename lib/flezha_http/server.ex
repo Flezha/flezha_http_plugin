@@ -3,7 +3,9 @@ defmodule FlezhaHttp.Server do
   The declared worker of both providers: it owns the Bandit listener and the
   counters its caps are kept in. It serves the Plug its worker options name
   (`plug`, `FlezhaHttp.Handler` by default), over TLS when they name a
-  `tls_certfile` and a `tls_keyfile`.
+  `tls_certfile` and a `tls_keyfile`, asking each client for a certificate
+  when they name a `tls_client_cacertfile`, and offering HTTP/2 beside
+  HTTP/1.1 on TLS when they set `http_2`.
 
   It follows its host: it stops when the host (a relay's Overwatch, or a
   controller plugin's running copy) goes away,
@@ -73,7 +75,7 @@ defmodule FlezhaHttp.Server do
       ip: ip,
       port: opts.port,
       startup_log: false,
-      http_2_options: [enabled: false],
+      http_2_options: [enabled: Map.get(opts, :http_2, false) and tls(opts) != []],
       # One acceptor holding at most `max_connections`, and a connection past it
       # closed at once: ThousandIsland's defaults (100 x 16 384) bound nothing.
       # Each read of a request head, and an idle keep-alive, waits the body
@@ -83,7 +85,8 @@ defmodule FlezhaHttp.Server do
         num_acceptors: 1,
         num_connections: opts.max_connections,
         max_connections_retry_count: 0,
-        read_timeout: config.body_timeout_ms
+        read_timeout: config.body_timeout_ms,
+        transport_options: client_auth(opts)
       ]
     ]
 
@@ -128,6 +131,18 @@ defmodule FlezhaHttp.Server do
        do: [scheme: :https, certfile: certfile, keyfile: keyfile]
 
   defp tls(_opts), do: []
+
+  # With a client authority, every client presents a certificate chaining to
+  # it, or the handshake fails before a request is read.
+  defp client_auth(%{tls_client_cacertfile: cacertfile}) when is_binary(cacertfile),
+    do: [
+      cacertfile: cacertfile,
+      verify: :verify_peer,
+      fail_if_no_peer_cert: true,
+      versions: [:"tlsv1.3"]
+    ]
+
+  defp client_auth(_opts), do: []
 
   @impl true
   def handle_info({:EXIT, bandit, reason}, %{bandit: bandit} = state),

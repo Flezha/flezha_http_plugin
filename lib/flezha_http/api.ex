@@ -10,6 +10,9 @@ defmodule FlezhaHttp.Api do
     catalogue's own form.
   - `POST /v1/call/<Name>`: one operation with a JSON array of arguments,
     answered with its JSON or its error object.
+  - `POST /v1/stream/<Name>`: one operation that streams, with a JSON array
+    of arguments, its events written as server-sent events as they happen
+    (`FlezhaHttp.Events.door/5`).
   - `POST /v1/relays/<id>/<channel>[?key=<key>]`: a relay's channel called
     with the body as its payload (`Relay.call_channel`), a partition group's
     member chosen by `key`, answered in the answer's format, or `202` for a
@@ -27,6 +30,7 @@ defmodule FlezhaHttp.Api do
   alias Flezha.Error
   alias Flezha.Service.Admin
   alias Flezha.Service.RelayApi
+  alias FlezhaHttp.Events
   alias FlezhaHttp.Handler
   alias FlezhaHttp.Server
   alias FlezhaHttp.Status
@@ -121,6 +125,12 @@ defmodule FlezhaHttp.Api do
       {_method, ["v1", "call", _name]} ->
         not_allowed(conn, "POST")
 
+      {"POST", ["v1", "stream", name]} ->
+        held(conn, config, &stream_one(&1, name, &2, context, config))
+
+      {_method, ["v1", "stream", _name]} ->
+        not_allowed(conn, "POST")
+
       {"POST", ["v1", "relays", relay, channel]} ->
         held(conn, config, &call_relay(&1, relay, channel, &2, context, config))
 
@@ -170,18 +180,24 @@ defmodule FlezhaHttp.Api do
     send_json(conn, 200, Jason.encode!(%{operations: operations}))
   end
 
-  # A name that is not text names nothing, and is not echoed: its bytes could
-  # not be encoded as JSON.
   defp call_one(conn, name, body, context, config) do
     answer =
       if String.valid?(name),
         do: door(context, config).(name, body),
-        else: {:error, Error.new("control.unknown_function", function: inspect(name))}
+        else: {:error, unknown(name)}
 
     case answer do
       {:ok, json} -> conn |> named(name) |> send_json(200, json)
       {:error, error} -> Status.send_error(conn, error)
     end
+  end
+
+  # Only an operation that streams is served here: any other is a call, under
+  # the call's deadline and waiting cap.
+  defp stream_one(conn, name, body, context, config) do
+    if String.valid?(name) and match?({:ok, %{stream: true}}, Flezha.Service.lookup(name)),
+      do: conn |> named(name) |> Events.door(name, body, context, config),
+      else: Status.send_error(conn, unknown(name))
   end
 
   # A relay's channel, called with the body as its payload and `?key=` as the
@@ -200,6 +216,13 @@ defmodule FlezhaHttp.Api do
       {:ok, json} -> conn |> named("Relay.call_channel") |> send_answer(RelayApi.answer(json))
       {:error, error} -> Status.send_error(conn, error)
     end
+  end
+
+  # A name that is not text names nothing, and is not echoed: its bytes could
+  # not be encoded as JSON.
+  defp unknown(name) do
+    shown = if String.valid?(name), do: name, else: inspect(name)
+    Error.new("control.unknown_function", function: shown)
   end
 
   defp send_answer(conn, :accepted), do: send_json(conn, 202, ~s({"accepted":true}))

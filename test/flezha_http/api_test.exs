@@ -27,6 +27,8 @@ defmodule FlezhaHttp.ApiTest do
       deadline_ms: 1_000,
       max_body_bytes: 1_024,
       max_waiting: 4,
+      max_streams: 4,
+      max_pending_events: 100,
       body_timeout_ms: 1_000,
       source_plugin_id: "api",
       counters: :atomics.new(3, signed: true),
@@ -208,7 +210,8 @@ defmodule FlezhaHttp.ApiTest do
             {:get, "/mcp", "POST"},
             {:delete, "/mcp", "POST"},
             {:post, "/v1/catalogue", "GET"},
-            {:get, "/v1/call/Relay.list", "POST"}
+            {:get, "/v1/call/Relay.list", "POST"},
+            {:get, "/v1/stream/Relay.listen", "POST"}
           ] do
         conn = request(method, path)
         assert conn.status == 405
@@ -422,6 +425,139 @@ defmodule FlezhaHttp.ApiTest do
 
       assert %{"name" => "Dlq.list", "args" => [%{"name" => "relay_class"}, %{"name" => "opts"}]} =
                Enum.find(ops, &(&1["name"] == "Dlq.list"))
+    end
+  end
+
+  describe "the stream route" do
+    # The SSE events of a finished response body, each as `{name, data}`.
+    defp events(conn) do
+      for "event: " <> event <- String.split(conn.resp_body, "\n\n", trim: true) do
+        [name, "data: " <> data] = String.split(event, "\n", parts: 2)
+        {name, Jason.decode!(data)}
+      end
+    end
+
+    # A door that hands `events` to the stream's holder, then answers `answer`.
+    defp emitting(events, answer \\ {:ok, ~s("done")}) do
+      fn _name, _args ->
+        holder = self() |> Process.info(:links) |> elem(1) |> hd()
+        for event <- events, do: send(holder, {:flezha_emit, event})
+        answer
+      end
+    end
+
+    test "each event is written as it is emitted, named by its kind, and the answer ends it" do
+      events = [
+        :attached,
+        {:output, "p1", %{"channel" => "out"}},
+        {:dead_lettered, Error.new("dlq.not_found", entry: "e1"), %{"channel" => "out"}},
+        {:tally, %{"out" => 3}, %{read_at_ms: 7, epochs: %{}}}
+      ]
+
+      config = config(context: @ops, answer: emitting(events))
+      conn = request(:post, "/v1/stream/Relay.listen", ~s(["default","prices"]), [], config)
+
+      assert conn.status == 200
+      assert Plug.Conn.get_resp_header(conn, "content-type") == ["text/event-stream"]
+
+      assert [
+               {"output", %{"payload" => "p1", "channel" => "out", "kind" => "output"}},
+               {"dead_lettered", %{"error" => %{"code" => "dlq.not_found"}}},
+               {"tally", %{"totals" => %{"out" => 3}, "read_at_ms" => 7}},
+               {"end", %{"answer" => "done"}}
+             ] = events(conn)
+
+      assert_received {:door, "Relay.listen", ~s(["default","prices"]), held}
+      assert held.emit == self()
+      assert Map.delete(held, :emit) == @ops
+    end
+
+    test "a refusal before the first event is a plain error response" do
+      refused = fn _, _ -> {:error, Error.new("authz.role_insufficient", action: "logs.tail")} end
+
+      conn =
+        request(
+          :post,
+          "/v1/stream/Logs.tail",
+          ~s([{"kind":"audit"}]),
+          [],
+          config(answer: refused)
+        )
+
+      assert conn.status == 403
+      assert json(conn)["error"]["code"] == "authz.role_insufficient"
+      refute conn.resp_body =~ "event:"
+    end
+
+    test "a failure after the first event ends the stream with its error" do
+      failed =
+        emitting([{:output, "p1", %{}}], {:error, Error.new("relay.not_found", relay: "x")})
+
+      conn =
+        request(:post, "/v1/stream/Relay.listen", ~s(["default","x"]), [], config(answer: failed))
+
+      assert conn.status == 200
+      assert [{"output", _}, {"end", %{"error" => %{"code" => "relay.not_found"}}}] = events(conn)
+    end
+
+    test "a stream past the cap is a 503 naming the plugin, and nothing runs" do
+      config = config(max_streams: 1)
+      :atomics.put(config.counters, 2, 1)
+      conn = request(:post, "/v1/stream/Relay.listen", ~s(["default","prices"]), [], config)
+
+      assert conn.status == 503
+
+      assert %{"code" => "http.streams_full", "details" => %{"plugin" => "api"}} =
+               json(conn)["error"]
+
+      refute_received {:door, _, _, _}
+    end
+
+    # Fails when: a client that stops reading grows the controller's memory
+    # instead of losing its stream.
+    test "events past max_pending_events end the stream with overrun, and none stays behind" do
+      test = self()
+
+      flood = fn _, _ ->
+        [holder] = self() |> Process.info(:links) |> elem(1)
+        send(test, {:running, self()})
+        :erlang.suspend_process(holder)
+        for n <- 1..5, do: send(holder, {:flezha_emit, {:output, "p#{n}", %{}}})
+        :erlang.resume_process(holder)
+        receive(do: (:never -> {:ok, "[]"}))
+      end
+
+      config = config(max_pending_events: 2, answer: flood)
+      conn = request(:post, "/v1/stream/Relay.listen", ~s(["default","prices"]), [], config)
+
+      assert [{"overrun", %{"pending" => pending}}] = events(conn)
+      assert pending >= 3
+      assert_received {:running, running}
+      refute Process.alive?(running)
+      refute_received {:flezha_emit, _}
+    end
+
+    test "only an operation that streams is served; a call is not a stream" do
+      for path <- [
+            "/v1/stream/Relay.list",
+            "/v1/stream/Op" <> <<0xFF>>,
+            "/v1/stream/Nothing.here"
+          ] do
+        conn = request(:post, path, "[]")
+        assert conn.status == 404
+        assert json(conn)["error"]["code"] == "control.unknown_function"
+      end
+
+      refute_received {:door, _, _, _}
+    end
+
+    test "a stream is not a call" do
+      admin = %{@viewer | role: :admin, namespace: "_system"}
+      config = config(context: admin, admin: &Flezha.Service.Admin.call/4)
+      conn = request(:post, "/v1/call/Observability.tail", ~s(["flezha_relay"]), [], config)
+
+      assert conn.status == 404
+      assert json(conn)["error"]["code"] == "control.unknown_function"
     end
   end
 

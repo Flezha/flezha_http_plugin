@@ -33,6 +33,10 @@ defmodule FlezhaHttp.ApiProviderTest do
              deadline_ms: 30_000,
              max_body_bytes: 1_048_576,
              max_waiting: 64,
+             max_streams: 64,
+             max_pending_events: 1_000,
+             require_client_cert: true,
+             tls_client_cacertfile: nil,
              max_connections: 128
            } = opts
   end
@@ -44,7 +48,44 @@ defmodule FlezhaHttp.ApiProviderTest do
     assert {:ok, _} = prepare(%{bind: "0.0.0.0", plain_http: true})
 
     assert {:ok, _} =
-             prepare(%{bind: "0.0.0.0", tls_certfile: "/c.pem", tls_keyfile: "/k.pem"})
+             prepare(%{
+               bind: "0.0.0.0",
+               tls_certfile: "/c.pem",
+               tls_keyfile: "/k.pem",
+               tls_client_cacertfile: "/ca.pem"
+             })
+  end
+
+  @tls %{tls_certfile: "/c.pem", tls_keyfile: "/k.pem"}
+
+  # Fails when: a listener off this machine serves anyone holding a token,
+  # without proving the client's host.
+  test "TLS off loopback needs a client authority, unless the opt-out is set and warned" do
+    assert {:error, {:http_client_cert_required, "10.0.0.5"}} =
+             prepare(Map.put(@tls, :bind, "10.0.0.5"))
+
+    assert code(prepare(Map.put(@tls, :bind, "10.0.0.5"))) == "http.client_cert_required"
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert {:ok, _} =
+                 prepare(Map.merge(@tls, %{bind: "10.0.0.5", require_client_cert: false}))
+      end)
+
+    assert log =~ "http_api plugin 'api' on 10.0.0.5 serves TLS without client certificates"
+
+    quiet =
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert {:ok, _} = prepare(Map.put(@tls, :bind, "127.0.0.1"))
+        assert {:ok, _} = prepare(%{bind: "10.0.0.5", plain_http: true})
+      end)
+
+    refute quiet =~ "client certificates"
+  end
+
+  test "a client authority needs the listener's own certificate" do
+    assert {:error, {:invalid_option_value, :tls_certfile, nil}} =
+             prepare(%{tls_client_cacertfile: "/ca.pem"})
   end
 
   test "a certificate without its key, or the reverse, is refused by name" do
@@ -58,6 +99,7 @@ defmodule FlezhaHttp.ApiProviderTest do
   test "its worker serves the API's Plug, one per controller" do
     assert {:ok, opts} = prepare(%{})
     assert [{{"_system", "api"}, worker}] = ApiProvider.worker_specs(opts)
+    assert worker.http_2
     assert worker.plug == FlezhaHttp.Api
   end
 end

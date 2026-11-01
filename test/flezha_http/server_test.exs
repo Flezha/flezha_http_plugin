@@ -7,6 +7,27 @@ defmodule FlezhaHttp.ServerTest do
   alias FlezhaHttp.Server
   alias FlezhaHttp.StandIn
 
+  # Two authorities, as an operator keeps them: `api` signs the listener and
+  # its clients, `other` stands for any authority the listener does not name.
+  setup_all do
+    dir = Path.join(System.tmp_dir!(), "flz_http_tls_#{System.unique_integer([:positive])}")
+    script = Path.expand("../../../../deploy/dist-tls/make-certs.sh", __DIR__)
+
+    for {ca, nodes} <- [{"api", ["server", "client"]}, {"other", ["stranger"]}] do
+      {_, 0} = System.cmd(script, ["ca", Path.join(dir, ca)], stderr_to_stdout: true)
+
+      for node <- nodes,
+          do:
+            {_, 0} =
+              System.cmd(script, ["node", Path.join(dir, ca), node, "--ip", "127.0.0.1"],
+                stderr_to_stdout: true
+              )
+    end
+
+    on_exit(fn -> File.rm_rf!(dir) end)
+    %{certs: dir}
+  end
+
   setup do
     {:ok, overwatch} = StandIn.start(self(), fn _ -> StandIn.ok(%{status: 200, body: "pong"}) end)
     %{overwatch: overwatch, port: Client.free_port()}
@@ -284,6 +305,193 @@ defmodule FlezhaHttp.ServerTest do
       # Noticed at the latest at the second heartbeat after the client left.
       assert_receive {:done, done_at}, 5_000
       assert done_at - closed_at <= 2
+    end
+  end
+
+  describe "the API's stream route" do
+    # Fails when: a door stream waits for its end before writing, or outlives
+    # the client that asked for it.
+    test "pushes each event while open, and a client that left ends it", ctx do
+      test = self()
+
+      admin = fn "Relay.listen", "[]", caller, :given ->
+        send(test, {:running, self()})
+        send(caller.emit, {:flezha_emit, {:output, "p1", %{"channel" => "out"}}})
+        receive(do: (:never -> {:ok, "[]"}))
+      end
+
+      start(ctx,
+        plug: FlezhaHttp.Api,
+        verify: fn "t" -> {:ok, %{source: :http}} end,
+        admin: admin,
+        allowed_origins: [],
+        max_pending_events: 10,
+        heartbeat_ms: 100
+      )
+
+      {conn, ref} =
+        Client.open(
+          ctx.port,
+          "POST",
+          "/v1/stream/Relay.listen",
+          [{"authorization", "Bearer t"}],
+          "[]"
+        )
+
+      {conn, response} =
+        Client.read(conn, ref, %{status: nil, headers: [], body: []}, fn acc ->
+          IO.iodata_to_binary(acc.body) =~ "event: output"
+        end)
+
+      assert response.status == 200
+      refute Map.get(response, :done)
+      assert IO.iodata_to_binary(response.body) =~ ~s("payload":"p1")
+
+      assert_receive {:running, running}
+      monitor = Process.monitor(running)
+      {:ok, _conn} = Mint.HTTP1.close(conn)
+      assert_receive {:DOWN, ^monitor, :process, ^running, _reason}, 5_000
+    end
+  end
+
+  describe "the API over TLS" do
+    defp tls_api(ctx, admin) do
+      start(ctx,
+        plug: FlezhaHttp.Api,
+        verify: fn "t" -> {:ok, %{source: :http}} end,
+        admin: admin,
+        allowed_origins: [],
+        max_pending_events: 10,
+        http_2: true,
+        tls_certfile: Path.join(ctx.certs, "api/server/node.pem"),
+        tls_keyfile: Path.join(ctx.certs, "api/server/node.key"),
+        tls_client_cacertfile: Path.join(ctx.certs, "api/ca.pem")
+      )
+    end
+
+    defp client_tls(ctx, nil), do: [cacertfile: Path.join(ctx.certs, "api/ca.pem")]
+
+    defp client_tls(ctx, who) do
+      [
+        cacertfile: Path.join(ctx.certs, "api/ca.pem"),
+        certfile: Path.join(ctx.certs, "#{who}/node.pem"),
+        keyfile: Path.join(ctx.certs, "#{who}/node.key")
+      ]
+    end
+
+    # One call over `protocol`, read to its end: `{:ok, status, body}`, or the
+    # error the connection failed with.
+    defp tls_call(ctx, protocol, who) do
+      with {:ok, conn} <-
+             Mint.HTTP.connect(:https, "127.0.0.1", ctx.port,
+               mode: :passive,
+               protocols: [protocol],
+               transport_opts: client_tls(ctx, who)
+             ),
+           {:ok, conn, ref} <-
+             Mint.HTTP.request(conn, "POST", "/v1/call/Relay.list", bearer(), "[]") do
+        drain(conn, [ref], %{})
+        |> case do
+          {:ok, conn, %{^ref => response}} ->
+            Mint.HTTP.close(conn)
+            {:ok, response.status, IO.iodata_to_binary(response.body)}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+      else
+        # Under TLS 1.3 a refused client learns it on its first write, not at
+        # connect.
+        {:error, _conn, reason} -> {:error, reason}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+
+    defp bearer, do: [{"authorization", "Bearer t"}, {"content-type", "application/json"}]
+
+    # Reads every response of `refs` to its end, each as `%{status:, body:}`.
+    defp drain(conn, refs, acc) do
+      if Enum.all?(refs, &get_in(acc, [&1, :done])) do
+        {:ok, conn, acc}
+      else
+        case Mint.HTTP.recv(conn, 0, 5_000) do
+          {:ok, conn, responses} -> drain(conn, refs, Enum.reduce(responses, acc, &response/2))
+          {:error, _conn, reason, _responses} -> {:error, reason}
+        end
+      end
+    end
+
+    defp response({:status, ref, status}, acc),
+      do: Map.put(acc, ref, %{status: status, body: [], done: false})
+
+    defp response({:data, ref, data}, acc), do: update_in(acc, [ref, :body], &[&1 | data])
+    defp response({:done, ref}, acc), do: put_in(acc, [ref, :done], true)
+    defp response(_other, acc), do: acc
+
+    test "a client with a certificate from the listener's authority and a token is served",
+         ctx do
+      tls_api(ctx, fn "Relay.list", "[]", _caller, :given -> {:ok, ~s(["r1"])} end)
+      assert {:ok, 200, ~s(["r1"])} = tls_call(ctx, :http1, "api/client")
+    end
+
+    test "a client without a certificate, or with another authority's, is refused at the handshake",
+         ctx do
+      test = self()
+
+      tls_api(ctx, fn name, _args, _caller, :given -> send(test, {:door, name}) && {:ok, "[]"} end)
+
+      capture_log(fn ->
+        for who <- [nil, "other/stranger"] do
+          assert {:error, %Mint.TransportError{}} = tls_call(ctx, :http1, who)
+        end
+      end)
+
+      refute_received {:door, _}
+    end
+
+    test "two streams and a call share one HTTP/2 connection, each stream its own events", ctx do
+      admin = fn
+        "Relay.listen", args, caller, :given ->
+          [relay] = Jason.decode!(args)
+          send(caller.emit, {:flezha_emit, {:output, relay, %{"channel" => "out"}}})
+          {:ok, ~s("#{relay} ended")}
+
+        "Relay.list", "[]", _caller, :given ->
+          {:ok, ~s(["r1"])}
+      end
+
+      tls_api(ctx, admin)
+
+      {:ok, conn} =
+        Mint.HTTP.connect(:https, "127.0.0.1", ctx.port,
+          mode: :passive,
+          protocols: [:http2],
+          transport_opts: client_tls(ctx, "api/client")
+        )
+
+      assert Mint.HTTP.protocol(conn) == :http2
+
+      {:ok, conn, a} =
+        Mint.HTTP.request(conn, "POST", "/v1/stream/Relay.listen", bearer(), ~s(["a"]))
+
+      {:ok, conn, b} =
+        Mint.HTTP.request(conn, "POST", "/v1/stream/Relay.listen", bearer(), ~s(["b"]))
+
+      {:ok, conn, call} = Mint.HTTP.request(conn, "POST", "/v1/call/Relay.list", bearer(), "[]")
+
+      {:ok, conn, responses} = drain(conn, [a, b, call], %{})
+      Mint.HTTP.close(conn)
+
+      for {ref, relay} <- [{a, "a"}, {b, "b"}] do
+        body = IO.iodata_to_binary(responses[ref].body)
+        assert responses[ref].status == 200
+        assert body =~ ~s("payload":"#{relay}")
+        assert body =~ ~s(event: end\ndata: {"answer":"#{relay} ended"})
+        refute body =~ ~s("payload":"#{if relay == "a", do: "b", else: "a"}")
+      end
+
+      assert %{status: 200, body: body} = responses[call]
+      assert IO.iodata_to_binary(body) == ~s(["r1"])
     end
   end
 end

@@ -14,6 +14,7 @@ defmodule FlezhaHttp.Events do
 
   alias Flezha.Error
   alias Flezha.Process.Poll
+  alias Flezha.Service.Admin
   alias FlezhaHttp.Server
   alias FlezhaHttp.Status
 
@@ -22,6 +23,9 @@ defmodule FlezhaHttp.Events do
   # current conn here, under one key, from the headers to the last write.
   @conn_key {__MODULE__, :conn}
   @retry_ms 250
+  # A quiet door stream writes a comment line this often, so a client that
+  # left is noticed; `heartbeat_ms` on the config overrides it.
+  @heartbeat_ms 15_000
 
   @doc "Stream `target` of the host's namespace on `conn`, inside the stream cap."
   @spec stream(Plug.Conn.t(), String.t(), [{String.t(), String.t()}], map()) :: Plug.Conn.t()
@@ -36,13 +40,119 @@ defmodule FlezhaHttp.Events do
         end
       end)
 
-    if result == :full do
-      Status.send_error(
-        conn,
-        Error.new("http.streams_full", relay: config.relay, max_streams: config.max_streams)
+    full(result, conn, config)
+  end
+
+  defp full(:full, conn, config) do
+    Status.send_error(
+      conn,
+      Error.new("http.streams_full",
+        plugin: config.source_plugin_id,
+        max_streams: config.max_streams
       )
-    else
-      result
+    )
+  end
+
+  defp full(result, _conn, _config), do: result
+
+  @doc """
+  Run the door's stream operation `name` with the JSON argument array `body`
+  as `context`, inside the stream cap, and write each event it emits as the
+  server-sent event `Flezha.Service.Admin.event/2` names. The operation's
+  answer is the last event, `end`; a refusal before the first event is a plain
+  error response. More than `max_pending_events` events received and not yet
+  written end the stream with `overrun`. The operation runs in a task linked
+  to the request process, and is ended with it.
+  """
+  @spec door(Plug.Conn.t(), String.t(), binary(), map(), map()) :: Plug.Conn.t()
+  def door(conn, name, body, context, config) do
+    result =
+      Server.occupy(config, :streams, fn ->
+        holder = self()
+        held = Map.put(context, :emit, holder)
+        task = Task.async(fn -> config.admin.(name, body, held, :given) end)
+
+        try do
+          Process.put(@conn_key, conn)
+          relay(task.ref, context, config)
+        after
+          Task.shutdown(task, :brutal_kill)
+          flush()
+          Process.delete(@conn_key)
+        end
+      end)
+
+    full(result, conn, config)
+  end
+
+  defp relay(ref, context, config) do
+    receive do
+      {:flezha_emit, event} ->
+        case pending() do
+          n when n > config.max_pending_events ->
+            opened(fn -> finish("overrun", ~s({"pending":#{n}})) end)
+
+          _n ->
+            relayed(write_door(Admin.event(event, context)), ref, context, config)
+        end
+
+      {^ref, answer} ->
+        Process.demonitor(ref, [:flush])
+        ended(answer)
+    after
+      quiet(config) -> relayed(send_chunk(":\n\n"), ref, context, config)
+    end
+  end
+
+  defp relayed(:continue, ref, context, config), do: relay(ref, context, config)
+  defp relayed(:done, _ref, _context, _config), do: Process.get(@conn_key)
+
+  # Nothing is written while the response is unopened, so a refusal can still
+  # be a plain error.
+  defp quiet(config) do
+    if unopened?(),
+      do: :infinity,
+      else: Map.get(config, :heartbeat_ms, @heartbeat_ms)
+  end
+
+  defp write_door(event) do
+    opened(fn ->
+      case event do
+        {name, object} -> send_chunk(frame(name, Jason.encode_to_iodata!(object)))
+        :attached -> :continue
+        :idle -> send_chunk(":\n\n")
+      end
+    end)
+  end
+
+  # Opens the response, if nothing has yet, before `write` writes to it.
+  defp opened(write) do
+    if unopened?(), do: open([])
+    write.()
+  end
+
+  defp ended({:error, %Error{} = error}) do
+    if unopened?(),
+      do: Status.send_error(Process.get(@conn_key), error),
+      else: finish("end", Error.render(error, :json))
+  end
+
+  defp ended({:ok, json}), do: opened(fn -> finish("end", [~s({"answer":), json, "}"]) end)
+
+  defp unopened?, do: Process.get(@conn_key).state == :unset
+
+  defp pending do
+    {:message_queue_len, n} = Process.info(self(), :message_queue_len)
+    n
+  end
+
+  # The request process may serve the connection's next request: no event of
+  # an ended stream stays in its mailbox.
+  defp flush do
+    receive do
+      {:flezha_emit, _event} -> flush()
+    after
+      0 -> :ok
     end
   end
 
@@ -56,7 +166,7 @@ defmodule FlezhaHttp.Events do
   # Only a target that does not exist yet, refused before anything was written,
   # is attached again.
   defp attached({:error, %Error{code: "relay.not_found"}} = absent) do
-    if Process.get(@conn_key).state == :unset, do: {:error, absent}, else: {:ok, absent}
+    if unopened?(), do: {:error, absent}, else: {:ok, absent}
   end
 
   defp attached(outcome), do: {:ok, outcome}

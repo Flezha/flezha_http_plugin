@@ -9,6 +9,8 @@ defmodule FlezhaHttp.ApiProvider do
   `docs/public/plugins/http_api.md`.
   """
 
+  require Logger
+
   alias Flezha.Plugin.ProviderBehaviour
 
   use ProviderBehaviour,
@@ -36,6 +38,17 @@ defmodule FlezhaHttp.ApiProvider do
       tls_keyfile: [
         type: :string,
         doc: "The PEM private key of `tls_certfile`"
+      ],
+      tls_client_cacertfile: [
+        type: :string,
+        doc:
+          "The PEM authority every client certificate must chain to; with it a client without one is refused at the TLS handshake"
+      ],
+      require_client_cert: [
+        type: :bool,
+        default: true,
+        doc:
+          "Set false to serve TLS off loopback without `tls_client_cacertfile`; warned on every enable and boot"
       ],
       plain_http: [
         type: :bool,
@@ -69,6 +82,21 @@ defmodule FlezhaHttp.ApiProvider do
         max: 10_000,
         doc: "Calls waiting for an answer at once, up to 10000; one more is answered 503"
       ],
+      max_streams: [
+        type: :int,
+        default: 64,
+        min: 1,
+        max: 10_000,
+        doc: "Event streams open at once, up to 10000; one more is answered 503"
+      ],
+      max_pending_events: [
+        type: :int,
+        default: 1_000,
+        min: 1,
+        max: 100_000,
+        doc:
+          "Events a stream may hold unwritten, up to 100000; one more ends it with an `overrun` event"
+      ],
       max_connections: [
         type: :int,
         default: 128,
@@ -86,13 +114,16 @@ defmodule FlezhaHttp.ApiProvider do
   @doc """
   Validate without I/O: the address is parsed, never resolved, and one that is
   not loopback is refused without TLS or `plain_http`, since a bearer token sent
-  in the clear can be replayed. The certificate is read when the worker binds.
+  in the clear can be replayed, and its TLS without `tls_client_cacertfile`
+  unless `require_client_cert` is false. The certificates are read when the
+  worker binds.
   """
   @impl true
   def init_provider(opts) do
     with {:ok, address} <- FlezhaHttp.Provider.address(opts.bind),
          :ok <- paired_tls(opts),
-         :ok <- secured(address, opts) do
+         :ok <- secured(address, opts),
+         :ok <- client_certs(address, opts) do
       {:ok, opts}
     end
   end
@@ -103,12 +134,35 @@ defmodule FlezhaHttp.ApiProvider do
   defp paired_tls(%{tls_certfile: cert, tls_keyfile: nil}) when is_binary(cert),
     do: ProviderBehaviour.refuse_value(:tls_keyfile, nil)
 
+  defp paired_tls(%{tls_certfile: nil, tls_client_cacertfile: ca}) when is_binary(ca),
+    do: ProviderBehaviour.refuse_value(:tls_certfile, nil)
+
   defp paired_tls(_opts), do: :ok
 
   defp secured(address, opts) do
     if loopback?(address) or opts.plain_http or is_binary(opts.tls_certfile),
       do: :ok,
       else: {:error, {:http_tls_required, opts.bind}}
+  end
+
+  # A host off this machine proves itself with a client certificate as well as
+  # a token. `plain_http` ends TLS in front of the listener, where client
+  # certificates are the proxy's to ask for.
+  defp client_certs(address, opts) do
+    cond do
+      loopback?(address) or not is_binary(opts.tls_certfile) or
+          is_binary(opts.tls_client_cacertfile) ->
+        :ok
+
+      opts.require_client_cert ->
+        {:error, {:http_client_cert_required, opts.bind}}
+
+      true ->
+        Logger.warning(
+          "[FlezhaHttp] http_api plugin '#{opts.source_plugin_id}' on #{opts.bind} serves TLS " <>
+            "without client certificates (require_client_cert is false)"
+        )
+    end
   end
 
   defp loopback?({127, _, _, _}), do: true
@@ -118,7 +172,10 @@ defmodule FlezhaHttp.ApiProvider do
   # One listener per controller: the copy that runs it is the one on this node.
   @impl true
   def worker_specs(opts),
-    do: [{{opts.source_namespace, opts.source_plugin_id}, Map.put(opts, :plug, FlezhaHttp.Api)}]
+    do: [
+      {{opts.source_namespace, opts.source_plugin_id},
+       Map.merge(opts, %{plug: FlezhaHttp.Api, http_2: true})}
+    ]
 
   @impl true
   defdelegate inspect_state(opts), to: FlezhaHttp.Provider
