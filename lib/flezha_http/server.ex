@@ -162,10 +162,24 @@ defmodule FlezhaHttp.Server do
 
   @impl true
   def terminate(_reason, %{bandit: bandit}) when is_pid(bandit) do
+    sockets = listen_sockets(bandit)
     ThousandIsland.stop(bandit)
+    for ref <- sockets, do: receive(do: ({:DOWN, ^ref, :port, _, _} -> :ok))
   end
 
   def terminate(_reason, _state), do: :ok
+
+  # The listener's exit closes its sockets asynchronously, so the stop can
+  # return while the port still accepts: monitor the sockets it holds (its
+  # linked ports) and wait for them, not for the process alone.
+  defp listen_sockets(bandit) do
+    with listener when is_pid(listener) <- ThousandIsland.Server.listener_pid(bandit),
+         {:links, links} <- Process.info(listener, :links) do
+      for port <- links, is_port(port), do: Port.monitor(port)
+    else
+      _ -> []
+    end
+  end
 
   defp report(state) do
     %{
