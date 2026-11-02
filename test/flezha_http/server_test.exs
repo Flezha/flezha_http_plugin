@@ -193,8 +193,10 @@ defmodule FlezhaHttp.ServerTest do
     # the one deadline over the whole body can end it.
     sender =
       spawn(fn ->
-        for _ <- 1..1_024,
-            do: :gen_tcp.send(socket, :binary.copy("a", 1_024)) && Process.sleep(100)
+        for _ <- 1..1_024 do
+          :gen_tcp.send(socket, :binary.copy("a", 1_024))
+          Process.sleep(100)
+        end
       end)
 
     {:ok, response} = :gen_tcp.recv(socket, 0, 5_000)
@@ -438,7 +440,10 @@ defmodule FlezhaHttp.ServerTest do
          ctx do
       test = self()
 
-      tls_api(ctx, fn name, _args, _caller, :given -> send(test, {:door, name}) && {:ok, "[]"} end)
+      tls_api(ctx, fn name, _args, _caller, :given ->
+        send(test, {:door, name})
+        {:ok, "[]"}
+      end)
 
       capture_log(fn ->
         for who <- [nil, "other/stranger"] do
