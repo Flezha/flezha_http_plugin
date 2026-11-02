@@ -120,11 +120,15 @@ defmodule FlezhaHttp.Events do
       else: Map.get(config, :heartbeat_ms, @heartbeat_ms)
   end
 
+  # A client that resets the stream while the response opens leaves its reset
+  # with the write that opened it, so the open's answer is the attach's.
+  defp write_door(:attached),
+    do: if(unopened?() and open([]) == :done, do: :done, else: :continue)
+
   defp write_door(event) do
     opened(fn ->
       case event do
         {name, object} -> send_chunk(frame(name, Jason.encode_to_iodata!(object)))
-        :attached -> :continue
         :idle -> send_chunk(":\n\n")
       end
     end)
@@ -192,7 +196,8 @@ defmodule FlezhaHttp.Events do
     end
   end
 
-  # The listener runs this after the attach and before the first event.
+  # The listener runs this after the attach and before the first event; `:done`
+  # when the client has already left.
   defp open(headers) do
     conn =
       @conn_key
@@ -204,8 +209,7 @@ defmodule FlezhaHttp.Events do
       |> Plug.Conn.send_chunked(200)
 
     Process.put(@conn_key, conn)
-    _ = send_chunk(":\n\n")
-    :ok
+    if send_chunk(":\n\n") == :done, do: :done, else: :ok
   end
 
   defp finish(event, data) do
