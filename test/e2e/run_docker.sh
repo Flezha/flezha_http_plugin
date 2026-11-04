@@ -56,7 +56,7 @@ docker run --rm -v "$TMP/code:/code" -v "$TMP/pkg:/out" -w "/code/$INNER" \
   sh -c "mix deps.get >/dev/null && mix flezha.plugin.package --output /out && chown -R $(id -u):$(id -g) /out /code" \
   >"$TMP/out/package.log" 2>&1 || { tail -30 "$TMP/out/package.log"; exit 1; }
 
-package_otp=$(tar -xzOf "$TMP/pkg/flezha_http-0.1.0.fpz" manifest.exs | sed -n 's/.*otp: "\([0-9]*\)".*/\1/p')
+package_otp=$(tar -xzOf "$TMP/pkg/flezha_http-0.1.1.fpz" manifest.exs | sed -n 's/.*otp: "\([0-9]*\)".*/\1/p')
 runtime_otp=$(docker run --rm --entrypoint /flezha/bin/flzvm "$RUNTIME" eval 'IO.puts(System.otp_release())' | tail -1)
 if [ -n "$package_otp" ] && [ "$package_otp" = "$runtime_otp" ]; then
   pass otp "the package was built on OTP $package_otp, the image runs OTP $runtime_otp"
@@ -68,10 +68,10 @@ say "the controller container, the package installed"
 docker run -d --name "$CONTROLLER" -e FLEZHA_DURABILITY_BACKEND=none -e FLEZHA_AUTHZ_ENABLED=false \
   -v "$TMP/s:/flezha/storage/app/sockets" -v "$TMP/pkg:/pkgs:ro" -p 127.0.0.1:18080:18080 "$RUNTIME" >/dev/null
 ctl boot await --timeout 120 >/dev/null || { docker logs "$CONTROLLER" | tail -30; exit 1; }
-ctl plugin install /pkgs/flezha_http-0.1.0.fpz >"$TMP/out/install.log" 2>&1 || { cat "$TMP/out/install.log"; exit 1; }
+ctl plugin install /pkgs/flezha_http-0.1.1.fpz >"$TMP/out/install.log" 2>&1 || { cat "$TMP/out/install.log"; exit 1; }
 docker restart "$CONTROLLER" >/dev/null
 ctl boot await --timeout 120 >/dev/null || { docker logs "$CONTROLLER" | tail -30; exit 1; }
-ctl plugin list --installed | grep -q 'flezha_http 0.1.0  loaded' || fail install "the package is not loaded"
+ctl plugin list --installed | grep -q 'flezha_http 0.1.1  loaded' || fail install "the package is not loaded"
 
 say "the runner on the host, the gateway on 0.0.0.0"
 build_runner
